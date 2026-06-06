@@ -1,0 +1,14 @@
+services:
+  llm-chat:
+    build: .
+    container_name: llm-chat
+    restart: unless-stopped
+    ports:
+      - "4000:4000"
+    volumes:
+      # Conversas persistidas fora do container
+      - ./data:/app/data
+    environment:
+      PORT: 4000
+      # IP do PC-Gamer com a API do LLM — ajuste se o IP mudar
+      LLM_URL: http://192.168.100.57:5000
