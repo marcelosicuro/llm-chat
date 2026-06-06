@@ -1,0 +1,763 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LLM Chat</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body {
+      height: 100%; margin: 0; overflow: hidden;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: #0d0d0d; color: #e5e7eb;
+    }
+
+    /* ── Layout ─────────────────────────────────────────── */
+    .shell   { display: flex; height: 100vh; }
+    .sidebar {
+      width: 250px; flex-shrink: 0;
+      background: #111; border-right: 1px solid #1e1e1e;
+      display: flex; flex-direction: column; overflow: hidden;
+    }
+    .main    { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+
+    /* ── Sidebar header ──────────────────────────────────── */
+    .sb-header {
+      padding: 16px 14px 10px;
+      display: flex; align-items: center; justify-content: space-between;
+      border-bottom: 1px solid #1e1e1e; flex-shrink: 0;
+    }
+    .sb-title { font-size: .72rem; font-weight: 700; text-transform: uppercase;
+                letter-spacing: 1.5px; color: #4b5563; }
+    .btn-new {
+      background: #1c2b4a; border: 1px solid #2d4a6a; color: #93c5fd;
+      border-radius: 7px; padding: 5px 10px; font-size: .72rem;
+      font-weight: 600; cursor: pointer; display: flex; align-items: center;
+      gap: 5px; transition: background .15s;
+    }
+    .btn-new:hover { background: #1e3a5f; }
+
+    /* ── Lista de conversas ──────────────────────────────── */
+    #convList {
+      flex: 1; overflow-y: auto; padding: 6px 8px;
+    }
+    #convList::-webkit-scrollbar { width: 4px; }
+    #convList::-webkit-scrollbar-thumb { background: #222; border-radius: 4px; }
+
+    .conv-item {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 8px 10px; border-radius: 8px; cursor: pointer;
+      gap: 6px; transition: background .12s; margin-bottom: 2px;
+    }
+    .conv-item:hover { background: #1a1a1a; }
+    .conv-item.active { background: #1c2233; border: 1px solid #2d3a52; }
+    .conv-item .conv-title {
+      font-size: .78rem; color: #d1d5db; white-space: nowrap;
+      overflow: hidden; text-overflow: ellipsis; flex: 1;
+    }
+    .conv-item.active .conv-title { color: #93c5fd; }
+    .conv-item .conv-date {
+      font-size: .6rem; color: #4b5563; flex-shrink: 0;
+    }
+    .conv-item .btn-del {
+      opacity: 0; background: none; border: none; color: #6b7280;
+      padding: 2px 4px; border-radius: 4px; cursor: pointer;
+      font-size: .7rem; flex-shrink: 0; transition: opacity .1s, color .1s;
+    }
+    .conv-item:hover .btn-del { opacity: 1; }
+    .conv-item .btn-del:hover { color: #f87171; }
+
+    .conv-empty {
+      text-align: center; padding: 32px 16px;
+      font-size: .75rem; color: #2a2a2a;
+    }
+    .conv-empty i { font-size: 1.8rem; display: block; margin-bottom: 8px; }
+
+    /* ── Configurações (accordion) ───────────────────────── */
+    .sb-cfg-toggle {
+      padding: 10px 14px; border-top: 1px solid #1e1e1e;
+      font-size: .65rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 1.2px; color: #374151; cursor: pointer;
+      display: flex; justify-content: space-between; align-items: center;
+      flex-shrink: 0; transition: color .15s;
+    }
+    .sb-cfg-toggle:hover { color: #6b7280; }
+    #cfgPanel {
+      border-top: 1px solid #1a1a1a; padding: 12px 14px;
+      display: flex; flex-direction: column; gap: 10px;
+      flex-shrink: 0; overflow-y: auto; max-height: 320px;
+    }
+    #cfgPanel::-webkit-scrollbar { width: 3px; }
+    #cfgPanel::-webkit-scrollbar-thumb { background: #222; }
+
+    .cfg-label {
+      font-size: .62rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .8px; color: #4b5563; margin-bottom: 4px;
+    }
+    .cfg-input {
+      width: 100%; background: #191919; border: 1px solid #262626;
+      color: #e5e7eb; border-radius: 6px; padding: 5px 8px;
+      font-size: .76rem; outline: none;
+    }
+    .cfg-input:focus { border-color: #3b82f6; }
+    textarea.cfg-input { resize: vertical; min-height: 68px; line-height: 1.4; }
+    .temp-row { display: flex; justify-content: space-between; align-items: center; }
+    .temp-val  { font-size: .7rem; color: #93c5fd; font-weight: 700; }
+    input[type=range] { accent-color: #3b82f6; width: 100%; }
+
+    /* ── Topbar ──────────────────────────────────────────── */
+    .topbar {
+      background: #111; border-bottom: 1px solid #1e1e1e;
+      padding: 10px 18px; display: flex; align-items: center;
+      gap: 10px; flex-shrink: 0;
+    }
+    .status-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: #22c55e; box-shadow: 0 0 6px #22c55e88; flex-shrink: 0;
+    }
+    .status-dot.off { background: #ef4444; box-shadow: 0 0 6px #ef444488; }
+    .model-chip {
+      background: #1c2233; border: 1px solid #2d4a6a; color: #93c5fd;
+      font-size: .68rem; font-weight: 700; padding: 3px 10px;
+      border-radius: 20px;
+    }
+    .conv-name-input {
+      background: transparent; border: none; outline: none;
+      color: #9ca3af; font-size: .85rem; font-weight: 600;
+      max-width: 260px; padding: 2px 6px; border-radius: 4px;
+      transition: background .15s;
+    }
+    .conv-name-input:focus { background: #1a1a1a; color: #e5e7eb; }
+
+    /* ── Mensagens ───────────────────────────────────────── */
+    #msgs {
+      flex: 1; overflow-y: auto; padding: 24px 18px;
+      display: flex; flex-direction: column; gap: 14px;
+    }
+    #msgs::-webkit-scrollbar { width: 5px; }
+    #msgs::-webkit-scrollbar-thumb { background: #222; border-radius: 4px; }
+
+    .msg-row        { display: flex; gap: 10px; align-items: flex-end; max-width: 800px; }
+    .msg-row.user   { align-self: flex-end; flex-direction: row-reverse; }
+    .msg-row.model  { align-self: flex-start; }
+
+    .avatar {
+      width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center; font-size: .7rem;
+    }
+    .msg-row.user  .avatar { background: #1c2b4a; color: #93c5fd; }
+    .msg-row.model .avatar { background: #14261a; color: #4ade80; }
+
+    .bubble {
+      padding: 10px 14px; border-radius: 14px;
+      font-size: .875rem; line-height: 1.6;
+      white-space: pre-wrap; word-break: break-word; max-width: 660px;
+    }
+    .msg-row.user  .bubble {
+      background: #1c2b4a; border: 1px solid #2d4a6a;
+      color: #dbeafe; border-bottom-right-radius: 4px;
+    }
+    .msg-row.model .bubble {
+      background: #191919; border: 1px solid #252525;
+      color: #e5e7eb; border-bottom-left-radius: 4px;
+    }
+    .bubble.err { background: #2a1c1c; border-color: #5a2d2d; color: #f87171; }
+
+    .cursor {
+      display: inline-block; width: 2px; height: .85em;
+      background: #93c5fd; border-radius: 1px; margin-left: 2px;
+      vertical-align: text-bottom; animation: blink .6s step-end infinite;
+    }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+
+    /* ── Estado vazio ────────────────────────────────────── */
+    .empty {
+      flex: 1; display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 10px; color: #222; pointer-events: none;
+    }
+    .empty i { font-size: 3rem; }
+    .empty p  { font-size: .85rem; margin: 0; }
+
+    /* ── Input ───────────────────────────────────────────── */
+    .input-area {
+      background: #0d0d0d; border-top: 1px solid #1a1a1a;
+      padding: 12px 18px; flex-shrink: 0;
+    }
+
+    /* Faixa de contexto */
+    #contextBar {
+      display: none; align-items: center; gap: 8px;
+      background: #14261a; border: 1px solid #1a3a24;
+      border-radius: 8px; padding: 6px 12px; margin-bottom: 8px;
+      font-size: .75rem; color: #4ade80;
+    }
+    #contextBar .ctx-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    #contextBar .btn-ctx-rm {
+      background: none; border: none; color: #4ade80; opacity: .7;
+      cursor: pointer; padding: 0 2px; font-size: .8rem; flex-shrink: 0;
+    }
+    #contextBar .btn-ctx-rm:hover { opacity: 1; color: #f87171; }
+
+    .input-wrap {
+      display: flex; align-items: flex-end; gap: 8px;
+      background: #191919; border: 1px solid #262626;
+      border-radius: 12px; padding: 8px 10px;
+      transition: border-color .2s;
+    }
+    .input-wrap:focus-within { border-color: #3b82f6; }
+
+    .btn-upload {
+      background: none; border: none; color: #4b5563;
+      padding: 4px 6px; border-radius: 6px; cursor: pointer;
+      font-size: .85rem; flex-shrink: 0; transition: color .15s;
+      align-self: flex-end; margin-bottom: 1px;
+    }
+    .btn-upload:hover { color: #9ca3af; }
+
+    #txt {
+      flex: 1; background: transparent; border: none; color: #e5e7eb;
+      font-size: .875rem; resize: none; outline: none;
+      max-height: 160px; min-height: 24px; line-height: 1.5; padding: 0;
+    }
+    #txt::placeholder { color: #333; }
+
+    #sendBtn {
+      background: #1d4ed8; border: none; color: #fff;
+      width: 34px; height: 34px; border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0; cursor: pointer;
+      transition: background .15s, transform .1s;
+      align-self: flex-end;
+    }
+    #sendBtn:hover:not(:disabled)  { background: #2563eb; }
+    #sendBtn:active:not(:disabled) { transform: scale(.92); }
+    #sendBtn:disabled { background: #1a1a1a; color: #333; cursor: not-allowed; }
+
+    .hint { font-size: .63rem; color: #222; text-align: center; margin-top: 6px; }
+
+    @media (max-width: 640px) { .sidebar { display: none; } }
+  </style>
+</head>
+<body>
+<div class="shell">
+
+  <!-- ══ SIDEBAR ═══════════════════════════════════════════ -->
+  <div class="sidebar">
+
+    <div class="sb-header">
+      <span class="sb-title">Conversas</span>
+      <button class="btn-new" onclick="newConversation()">
+        <i class="fas fa-plus"></i> Nova
+      </button>
+    </div>
+
+    <div id="convList">
+      <div class="conv-empty"><i class="fas fa-comments"></i>Nenhuma conversa ainda</div>
+    </div>
+
+    <!-- Configurações -->
+    <div class="sb-cfg-toggle" onclick="toggleCfg()" id="cfgToggle">
+      <span><i class="fas fa-sliders me-2"></i>Configurações</span>
+      <i class="fas fa-chevron-up" id="cfgChevron" style="font-size:.65rem;"></i>
+    </div>
+    <div id="cfgPanel">
+      <div>
+        <div class="cfg-label">Modelo</div>
+        <input id="cfgModel" class="cfg-input" type="text" value="" placeholder="nome do modelo">
+      </div>
+      <div>
+        <div class="cfg-label temp-row">
+          Temperatura <span class="temp-val" id="tempVal">0.7</span>
+        </div>
+        <input type="range" id="cfgTemp" min="0" max="2" step="0.05" value="0.7"
+               oninput="updateTemp(this.value)">
+        <div id="tempDesc" style="font-size:.62rem;color:#4b5563;margin-top:4px;line-height:1.4;"></div>
+      </div>
+      <div>
+        <div class="cfg-label">Max tokens</div>
+        <input id="cfgMaxTok" class="cfg-input" type="number" value="100000" min="1" max="200000">
+      </div>
+      <div>
+        <div class="cfg-label">System prompt</div>
+        <textarea id="cfgSystem" class="cfg-input"
+          placeholder="Instrução inicial...">Você é um assistente útil e conciso. Responda sempre em português do Brasil.</textarea>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ══ MAIN ══════════════════════════════════════════════ -->
+  <div class="main">
+
+    <!-- Topbar -->
+    <div class="topbar">
+      <div id="dot" class="status-dot off"></div>
+      <input id="convTitle" class="conv-name-input" value="Nova conversa"
+             onchange="renameConversation(this.value)" placeholder="Título da conversa">
+      <span id="modelChip" class="model-chip ms-1">verificando…</span>
+      <div class="ms-auto d-flex gap-2">
+        <button onclick="ping()"
+          style="background:#191919;border:1px solid #262626;color:#6b7280;
+                 border-radius:6px;padding:4px 10px;font-size:.72rem;cursor:pointer;">
+          <i class="fas fa-plug me-1"></i>Reconectar
+        </button>
+      </div>
+    </div>
+
+    <!-- Mensagens -->
+    <div id="msgs">
+      <div class="empty" id="empty">
+        <i class="fas fa-robot"></i>
+        <p>Crie ou selecione uma conversa</p>
+      </div>
+    </div>
+
+    <!-- Input -->
+    <div class="input-area">
+      <!-- Faixa de contexto -->
+      <div id="contextBar">
+        <i class="fas fa-paperclip"></i>
+        <span class="ctx-name" id="ctxName"></span>
+        <button class="btn-ctx-rm" onclick="clearContext()" title="Remover contexto">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+
+      <div class="input-wrap">
+        <!-- Upload -->
+        <button class="btn-upload" onclick="document.getElementById('fileInput').click()"
+                title="Anexar arquivo como contexto">
+          <i class="fas fa-paperclip"></i>
+        </button>
+        <input type="file" id="fileInput" style="display:none"
+               accept=".txt,.md,.json,.csv,.xml,.js,.ts,.py,.html,.css,.log,.yaml,.yml,.sql"
+               onchange="uploadContext(this)">
+
+        <textarea id="txt" rows="1" placeholder="Digite sua mensagem…"
+                  onkeydown="onKey(event)" oninput="resize(this)"></textarea>
+
+        <button id="sendBtn" onclick="send()">
+          <i class="fas fa-paper-plane" style="font-size:.75rem;"></i>
+        </button>
+      </div>
+      <p class="hint">Enter para enviar · Shift+Enter para quebrar linha</p>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  // ── Estado global ─────────────────────────────────────────
+  let currentId  = null;   // id da conversa ativa
+  let busy       = false;
+  let context    = null;   // { name, text } — arquivo anexado
+  let cfgOpen    = true;
+
+  // ── Ping / detectar modelo ────────────────────────────────
+  async function ping() {
+    const dot  = document.getElementById('dot');
+    const chip = document.getElementById('modelChip');
+    dot.className = 'status-dot off';
+    chip.textContent = 'verificando…';
+    try {
+      const r = await fetch('/llm/v1/models', { signal: AbortSignal.timeout(4000) });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const j = await r.json();
+      const m = j.data?.[0]?.id ?? '—';
+      dot.className = 'status-dot';
+      chip.textContent = m;
+      if (!document.getElementById('cfgModel').value) {
+        document.getElementById('cfgModel').value = m;
+        if (currentId) saveSettings();
+      }
+    } catch {
+      dot.className = 'status-dot off';
+      chip.textContent = 'offline';
+    }
+  }
+
+  // ── Lista de conversas ────────────────────────────────────
+  async function loadList() {
+    const list = await fetch('/conversations').then(r => r.json());
+    renderList(list);
+    return list;
+  }
+
+  function renderList(list) {
+    const el = document.getElementById('convList');
+    if (!list.length) {
+      el.innerHTML = '<div class="conv-empty"><i class="fas fa-comments"></i>Nenhuma conversa ainda</div>';
+      return;
+    }
+    el.innerHTML = list.map(c => `
+      <div class="conv-item ${c.id === currentId ? 'active' : ''}"
+           id="ci-${c.id}" onclick="selectConversation('${c.id}')">
+        <div style="flex:1;min-width:0;">
+          <div class="conv-title">${esc(c.title)}</div>
+          <div class="conv-date">${relDate(c.updatedAt)}</div>
+        </div>
+        <button class="btn-del" onclick="deleteConversation(event,'${c.id}')" title="Excluir">
+          <i class="fas fa-trash-alt"></i>
+        </button>
+      </div>`).join('');
+  }
+
+  // ── Selecionar conversa ───────────────────────────────────
+  async function selectConversation(id) {
+    if (id === currentId) return;
+    currentId = id;
+    const conv = await fetch(`/conversations/${id}`).then(r => r.json());
+
+    // Atualiza UI de configurações
+    document.getElementById('cfgModel').value   = conv.model        || '';
+    document.getElementById('cfgTemp').value    = conv.temperature  ?? 0.7;
+    document.getElementById('cfgMaxTok').value  = conv.maxTokens    ?? 512;
+    document.getElementById('cfgSystem').value  = conv.systemPrompt || '';
+    updateTemp(conv.temperature ?? 0.7);
+
+    // Título
+    document.getElementById('convTitle').value = conv.title;
+
+    // Contexto salvo
+    context = conv.context ?? null;
+    renderContextBar();
+
+    // Renderiza mensagens
+    renderMessages(conv.messages || []);
+
+    // Atualiza active na lista
+    document.querySelectorAll('.conv-item').forEach(el => el.classList.remove('active'));
+    document.getElementById('ci-' + id)?.classList.add('active');
+
+    document.getElementById('txt').focus();
+  }
+
+  function renderMessages(messages) {
+    const el = document.getElementById('msgs');
+    el.innerHTML = '';
+    if (!messages.length) {
+      el.innerHTML = '<div class="empty"><i class="fas fa-robot"></i><p>Sem mensagens ainda</p></div>';
+      return;
+    }
+    messages.forEach(m => addBubble(m.role === 'user' ? 'user' : 'model', m.content));
+    scrollEnd();
+  }
+
+  // ── Nova conversa ─────────────────────────────────────────
+  async function newConversation() {
+    const model  = document.getElementById('cfgModel').value.trim();
+    const temp   = parseFloat(document.getElementById('cfgTemp').value);
+    const maxTok = parseInt(document.getElementById('cfgMaxTok').value);
+    const sys    = document.getElementById('cfgSystem').value.trim();
+
+    const conv = await fetch('/conversations', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model, temperature: temp, maxTokens: maxTok, systemPrompt: sys })
+    }).then(r => r.json());
+
+    await loadList();
+    selectConversation(conv.id);
+  }
+
+  // ── Renomear ──────────────────────────────────────────────
+  async function renameConversation(title) {
+    if (!currentId || !title.trim()) return;
+    await fetch(`/conversations/${currentId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: title.trim() })
+    });
+    loadList();
+  }
+
+  // ── Excluir ───────────────────────────────────────────────
+  async function deleteConversation(e, id) {
+    e.stopPropagation();
+    if (!confirm('Excluir esta conversa?')) return;
+    await fetch(`/conversations/${id}`, { method: 'DELETE' });
+    if (currentId === id) {
+      currentId = null;
+      context   = null;
+      renderContextBar();
+      document.getElementById('convTitle').value = 'Nova conversa';
+      document.getElementById('msgs').innerHTML =
+        '<div class="empty" id="empty"><i class="fas fa-robot"></i><p>Crie ou selecione uma conversa</p></div>';
+    }
+    loadList();
+  }
+
+  // ── Salvar configurações da conversa ──────────────────────
+  async function saveSettings() {
+    if (!currentId) return;
+    await fetch(`/conversations/${currentId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model:        document.getElementById('cfgModel').value.trim(),
+        temperature:  parseFloat(document.getElementById('cfgTemp').value),
+        maxTokens:    parseInt(document.getElementById('cfgMaxTok').value),
+        systemPrompt: document.getElementById('cfgSystem').value.trim()
+      })
+    });
+  }
+
+  // ── Enviar mensagem ───────────────────────────────────────
+  async function send() {
+    if (busy) return;
+    const input = document.getElementById('txt');
+    const text  = input.value.trim();
+    if (!text) return;
+
+    // Se não tem conversa ativa, cria uma
+    if (!currentId) await newConversation();
+
+    document.getElementById('empty')?.remove();
+
+    const model  = document.getElementById('cfgModel').value.trim();
+    const temp   = parseFloat(document.getElementById('cfgTemp').value);
+    const maxTok = parseInt(document.getElementById('cfgMaxTok').value);
+    const sys    = document.getElementById('cfgSystem').value.trim();
+
+    // Busca histórico atual da conversa
+    const conv = await fetch(`/conversations/${currentId}`).then(r => r.json());
+    const history = conv.messages || [];
+
+    // Monta mensagens para a API
+    const apiMessages = [];
+    let systemFull = sys;
+    if (context) {
+      systemFull += `\n\n---\nContexto do arquivo "${context.name}":\n\`\`\`\n${context.text}\n\`\`\``;
+    }
+    if (systemFull.trim()) apiMessages.push({ role: 'system', content: systemFull.trim() });
+    apiMessages.push(...history, { role: 'user', content: text });
+
+    // UI
+    addBubble('user', text);
+    input.value = '';
+    resize(input);
+    const { bubble } = addBubble('model', '');
+    const cur = document.createElement('span');
+    cur.className = 'cursor';
+    bubble.appendChild(cur);
+    setBusy(true);
+
+    // Salva mensagem do usuário
+    const newHistory = [...history, { role: 'user', content: text }];
+    const isFirst = history.length === 0;
+
+    try {
+      const resp = await fetch('/llm/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model, messages: apiMessages,
+                               temperature: temp, max_tokens: maxTok, stream: true })
+      });
+
+      if (!resp.ok) {
+        const e = await resp.json().catch(() => ({}));
+        throw new Error(e?.error?.message ?? 'HTTP ' + resp.status);
+      }
+
+      const reader = resp.body.getReader();
+      const dec    = new TextDecoder();
+      let   reply  = '';
+      let   buf    = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += dec.decode(value, { stream: true });
+        const lines = buf.split('\n');
+        buf = lines.pop();
+        for (const line of lines) {
+          if (!line.startsWith('data:')) continue;
+          const data = line.slice(5).trim();
+          if (data === '[DONE]') break;
+          try {
+            const delta = JSON.parse(data).choices?.[0]?.delta?.content ?? '';
+            reply += delta;
+            bubble.textContent = reply;
+            bubble.appendChild(cur);
+            scrollEnd();
+          } catch { }
+        }
+      }
+
+      cur.remove();
+      bubble.textContent = reply;
+
+      // Salva histórico completo + auto-título na 1ª troca
+      const finalHistory = [...newHistory, { role: 'assistant', content: reply }];
+      const patch = { messages: finalHistory };
+      if (isFirst) patch.title = text.slice(0, 50) + (text.length > 50 ? '…' : '');
+      await fetch(`/conversations/${currentId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(patch)
+      });
+
+      if (isFirst) {
+        document.getElementById('convTitle').value = patch.title;
+        loadList();
+      }
+
+    } catch (err) {
+      cur.remove();
+      bubble.textContent = '⚠ ' + err.message;
+      bubble.classList.add('err');
+    }
+
+    setBusy(false);
+    scrollEnd();
+  }
+
+  // ── Upload de contexto ────────────────────────────────────
+  async function uploadContext(input) {
+    const file = input.files[0];
+    if (!file) return;
+    input.value = '';
+
+    const fd = new FormData();
+    fd.append('file', file);
+
+    try {
+      const r = await fetch('/upload-context', { method: 'POST', body: fd });
+      if (!r.ok) { const e = await r.json(); throw new Error(e.error); }
+      context = await r.json();
+      renderContextBar();
+
+      // Persiste contexto na conversa se já existe
+      if (currentId) {
+        await fetch(`/conversations/${currentId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ context })
+        });
+      }
+    } catch (err) {
+      alert('Erro ao carregar arquivo: ' + err.message);
+    }
+  }
+
+  function clearContext() {
+    context = null;
+    renderContextBar();
+    if (currentId) {
+      fetch(`/conversations/${currentId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ context: null })
+      });
+    }
+  }
+
+  function renderContextBar() {
+    const bar = document.getElementById('contextBar');
+    if (context) {
+      document.getElementById('ctxName').textContent = context.name;
+      bar.style.display = 'flex';
+    } else {
+      bar.style.display = 'none';
+    }
+  }
+
+  // ── Accordion configurações ───────────────────────────────
+  function toggleCfg() {
+    cfgOpen = !cfgOpen;
+    document.getElementById('cfgPanel').style.display = cfgOpen ? '' : 'none';
+    document.getElementById('cfgChevron').className =
+      cfgOpen ? 'fas fa-chevron-up' : 'fas fa-chevron-down';
+    document.getElementById('cfgChevron').style.fontSize = '.65rem';
+  }
+
+  // Salva settings ao perder foco de qualquer campo de config
+  ['cfgModel','cfgMaxTok','cfgSystem','cfgTemp'].forEach(id => {
+    document.getElementById(id).addEventListener('change', saveSettings);
+  });
+
+  // ── Helpers ───────────────────────────────────────────────
+  function addBubble(role, text) {
+    const row = document.createElement('div');
+    row.className = 'msg-row ' + role;
+    const av = document.createElement('div');
+    av.className = 'avatar';
+    av.innerHTML = role === 'user'
+      ? '<i class="fas fa-user"></i>'
+      : '<i class="fas fa-robot"></i>';
+    const bubble = document.createElement('div');
+    bubble.className = 'bubble';
+    bubble.textContent = text;
+    row.appendChild(av);
+    row.appendChild(bubble);
+    document.getElementById('msgs').appendChild(row);
+    scrollEnd();
+    return { bubble, row };
+  }
+
+  function scrollEnd() {
+    const el = document.getElementById('msgs');
+    el.scrollTop = el.scrollHeight;
+  }
+
+  function setBusy(v) {
+    busy = v;
+    const btn = document.getElementById('sendBtn');
+    btn.disabled = v;
+    btn.innerHTML = v
+      ? '<i class="fas fa-spinner fa-spin" style="font-size:.75rem;"></i>'
+      : '<i class="fas fa-paper-plane" style="font-size:.75rem;"></i>';
+  }
+
+  function resize(el) {
+    el.style.height = 'auto';
+    el.style.height = Math.min(el.scrollHeight, 160) + 'px';
+  }
+
+  function onKey(e) {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+  }
+
+  function esc(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  function relDate(iso) {
+    const d  = new Date(iso);
+    const now = Date.now();
+    const diff = now - d.getTime();
+    if (diff < 60000)   return 'agora';
+    if (diff < 3600000) return Math.floor(diff/60000) + 'min';
+    if (diff < 86400000)return Math.floor(diff/3600000) + 'h';
+    return d.toLocaleDateString('pt-BR', { day:'2-digit', month:'2-digit' });
+  }
+
+  // ── Temperatura ───────────────────────────────────────────
+  function updateTemp(v) {
+    v = parseFloat(v);
+    document.getElementById('tempVal').textContent = v.toFixed(2);
+    const desc = document.getElementById('tempDesc');
+    if      (v === 0)   desc.textContent = '🔒 Determinístico — sempre a resposta mais provável.';
+    else if (v <= 0.3)  desc.textContent = '🎯 Preciso — ideal para código, dados e fatos.';
+    else if (v <= 0.7)  desc.textContent = '⚖️ Equilibrado — bom para uso geral e conversas.';
+    else if (v <= 1.0)  desc.textContent = '✍️ Criativo — respostas mais variadas e fluidas.';
+    else if (v <= 1.5)  desc.textContent = '🎨 Muito criativo — pode fugir do tema ocasionalmente.';
+    else                desc.textContent = '🌀 Caótico — respostas imprevisíveis, uso experimental.';
+  }
+
+  // ── Init ──────────────────────────────────────────────────
+  (async () => {
+    await ping();
+    const list = await loadList();
+    // Abre a conversa mais recente automaticamente
+    if (list.length) selectConversation(list[0].id);
+  })();
+
+  updateTemp(document.getElementById('cfgTemp').value);
+  document.getElementById('txt').focus();
+</script>
+</body>
+</html>
