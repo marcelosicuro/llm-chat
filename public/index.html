@@ -171,6 +171,16 @@
     .btn-modal-save:hover { background: #2563eb; }
     .btn-modal-save.saved { background: #166534; }
 
+    /* Toast de notificação */
+    .toast-msg {
+      position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+      background: #1e293b; color: #e2e8f0; border: 1px solid #334155;
+      padding: 8px 18px; border-radius: 8px; font-size: .78rem;
+      z-index: 200; pointer-events: none;
+      animation: toast-in .2s ease;
+    }
+    @keyframes toast-in { from { opacity:0; transform: translateX(-50%) translateY(8px); } to { opacity:1; transform: translateX(-50%) translateY(0); } }
+
     /* ── Topbar ──────────────────────────────────────────── */
     .topbar {
       background: #111; border-bottom: 1px solid #1e1e1e;
@@ -470,12 +480,13 @@
 
 <script>
   // ── Estado global ─────────────────────────────────────────
-  let currentId  = null;   // id da conversa ativa
-  let busy       = false;
-  let context    = null;   // { name, text } — arquivo anexado
-  let cfgOpen    = true;
-  let memOpen    = true;
-  let memory     = '';     // conteúdo de data/memory.md
+  let currentId       = null;   // id da conversa ativa
+  let busy            = false;
+  let context         = null;   // { name, text } — arquivo anexado
+  let cfgOpen         = true;
+  let memOpen         = true;
+  let memory          = '';     // conteúdo de data/memory.md
+  let availableModels = [];     // modelos carregados no LM Studio
 
   // ── Memória global ────────────────────────────────────────
   async function loadMemory() {
@@ -519,6 +530,7 @@
       const j = await r.json();
       const models = (j.data ?? []).map(m => m.id).filter(Boolean).sort();
       if (!models.length) throw new Error('lista vazia');
+      availableModels = models;
 
       // Preserva seleção atual ou usa o primeiro da lista
       const current = sel.value;
@@ -828,20 +840,61 @@
     scrollEnd();
   }
 
+  // ── Auto-seleção de modelo por tipo de conteúdo ──────────
+  const VISION_PAT = /llava|vision|bakllava|moondream|minicpm|cogvlm|qwen.*vl|vl.*qwen|gemma.*v|pixtral/i;
+
+  function switchModelIfNeeded(isImage) {
+    if (!availableModels.length) return;
+    const sel     = document.getElementById('cfgModel');
+    const current = sel.value;
+
+    if (isImage) {
+      const alreadyVision = VISION_PAT.test(current);
+      if (alreadyVision) return;
+      const visionModel = availableModels.find(m => VISION_PAT.test(m));
+      if (!visionModel) { showToast('⚠ Nenhum modelo de visão carregado no LM Studio'); return; }
+      sel.value = visionModel;
+      document.getElementById('modelChip').textContent = visionModel;
+      if (currentId) saveSettings();
+      showToast(`Modelo → ${visionModel} (imagem detectada)`);
+    } else {
+      // Para texto/PDF: se estiver num modelo de visão, sugere trocar para um texto
+      const isVision = VISION_PAT.test(current);
+      if (!isVision) return;
+      const textModel = availableModels.find(m => !VISION_PAT.test(m));
+      if (!textModel) return;
+      sel.value = textModel;
+      document.getElementById('modelChip').textContent = textModel;
+      if (currentId) saveSettings();
+      showToast(`Modelo → ${textModel} (documento detectado)`);
+    }
+  }
+
+  function showToast(msg) {
+    const t = document.createElement('div');
+    t.className = 'toast-msg';
+    t.textContent = msg;
+    document.body.appendChild(t);
+    setTimeout(() => t.remove(), 3000);
+  }
+
   // ── Upload de contexto ────────────────────────────────────
   async function uploadContext(input) {
     const file = input.files[0];
     if (!file) return;
     input.value = '';
+    await uploadFile(file);
+  }
 
+  async function uploadFile(file) {
     const fd = new FormData();
     fd.append('file', file);
-
     try {
       const r = await fetch('/upload-context', { method: 'POST', body: fd });
       if (!r.ok) { const e = await r.json(); throw new Error(e.error); }
       context = await r.json();
       renderContextBar();
+      switchModelIfNeeded(!!context.isImage);
 
       // Persiste contexto na conversa se já existe
       if (currentId) {
@@ -1019,6 +1072,20 @@
     else if (v <= 1.5)  desc.textContent = '🎨 Muito criativo — pode fugir do tema ocasionalmente.';
     else                desc.textContent = '🌀 Caótico — respostas imprevisíveis, uso experimental.';
   }
+
+  // ── Paste de imagem (Cmd+V / Ctrl+V) ─────────────────────
+  document.getElementById('txt').addEventListener('paste', async (e) => {
+    const items = [...(e.clipboardData?.items ?? [])];
+    const imgItem = items.find(i => i.type.startsWith('image/'));
+    if (!imgItem) return;
+    e.preventDefault();
+    const file = imgItem.getAsFile();
+    if (!file) return;
+    // Garante nome legível para o arquivo colado
+    const ext  = file.type.split('/')[1] || 'png';
+    const named = new File([file], `screenshot.${ext}`, { type: file.type });
+    await uploadFile(named);
+  });
 
   // ── Init ──────────────────────────────────────────────────
   (async () => {
