@@ -407,14 +407,54 @@
 
     .hint { font-size: .63rem; color: #222; text-align: center; margin-top: 6px; }
 
-    @media (max-width: 640px) { .sidebar { display: none; } }
+    /* ── Botões da topbar ────────────────────────────────────── */
+    .topbar-btn {
+      background: #191919; border: 1px solid #262626; color: #6b7280;
+      border-radius: 6px; padding: 4px 10px; font-size: .72rem; cursor: pointer;
+      display: flex; align-items: center; gap: 5px; flex-shrink: 0;
+      transition: color .15s, border-color .15s;
+    }
+    .topbar-btn:hover { color: #9ca3af; border-color: #374151; }
+    .btn-hamburger { display: none; }
+
+    /* ── Sidebar overlay (mobile) ───────────────────────────── */
+    .sidebar-overlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,.55); z-index: 49;
+    }
+    .sidebar-overlay.open { display: block; }
+
+    /* ── Responsivo ─────────────────────────────────────────── */
+    @media (max-width: 768px) {
+      .sidebar {
+        position: fixed; top: 0; left: 0; bottom: 0;
+        z-index: 50; width: 280px;
+        transform: translateX(-100%);
+        transition: transform .25s ease;
+      }
+      .sidebar.open {
+        transform: translateX(0);
+        box-shadow: 6px 0 24px rgba(0,0,0,.6);
+      }
+      .btn-hamburger { display: flex !important; }
+      .btn-label { display: none; }
+      .model-chip { max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .conv-name-input { max-width: 130px; }
+      .msg-row.user  .bubble,
+      .msg-row.model .bubble { max-width: 88vw; }
+      .attach-preview-bubble { max-width: 72vw; }
+      .attach-preview-bubble img { max-width: 100%; }
+    }
   </style>
 </head>
 <body>
 <div class="shell">
 
+  <!-- Overlay da sidebar em mobile -->
+  <div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
+
   <!-- ══ SIDEBAR ═══════════════════════════════════════════ -->
-  <div class="sidebar">
+  <div class="sidebar" id="sidebar">
 
     <div class="sb-header">
       <span class="sb-title">Conversas</span>
@@ -501,20 +541,17 @@
              onchange="renameConversation(this.value)" placeholder="Título da conversa">
       <span id="modelChip" class="model-chip ms-1">verificando…</span>
       <div class="ms-auto d-flex gap-2">
-        <button onclick="exportChat(this)" title="Copiar conversa para área de transferência"
-          style="background:#191919;border:1px solid #262626;color:#6b7280;
-                 border-radius:6px;padding:4px 10px;font-size:.72rem;cursor:pointer;">
-          <i class="fas fa-copy me-1"></i>Exportar
+        <button onclick="exportChat(this)" title="Copiar conversa" class="topbar-btn">
+          <i class="fas fa-copy"></i><span class="btn-label">Exportar</span>
         </button>
-        <button onclick="openModal()" title="Configurações"
-          style="background:#191919;border:1px solid #262626;color:#6b7280;
-                 border-radius:6px;padding:4px 10px;font-size:.72rem;cursor:pointer;">
+        <button onclick="openModal()" title="Configurações" class="topbar-btn">
           <i class="fas fa-gear"></i>
         </button>
-        <button onclick="ping()"
-          style="background:#191919;border:1px solid #262626;color:#6b7280;
-                 border-radius:6px;padding:4px 10px;font-size:.72rem;cursor:pointer;">
-          <i class="fas fa-plug me-1"></i>Reconectar
+        <button onclick="ping()" title="Reconectar" class="topbar-btn">
+          <i class="fas fa-plug"></i><span class="btn-label">Reconectar</span>
+        </button>
+        <button onclick="toggleSidebar()" title="Conversas" class="topbar-btn btn-hamburger">
+          <i class="fas fa-bars"></i>
         </button>
       </div>
     </div>
@@ -690,6 +727,7 @@
     document.querySelectorAll('.conv-item').forEach(el => el.classList.remove('active'));
     document.getElementById('ci-' + id)?.classList.add('active');
 
+    closeSidebar();
     document.getElementById('txt').focus();
   }
 
@@ -1222,6 +1260,16 @@
   }
 
   // ── Modal de configurações avançadas ─────────────────────
+  // ── Sidebar mobile ────────────────────────────────────────
+  function toggleSidebar() {
+    document.getElementById('sidebar').classList.toggle('open');
+    document.getElementById('sidebarOverlay').classList.toggle('open');
+  }
+  function closeSidebar() {
+    document.getElementById('sidebar').classList.remove('open');
+    document.getElementById('sidebarOverlay').classList.remove('open');
+  }
+
   function openModal() {
     document.getElementById('modalOverlay').classList.add('open');
     document.getElementById('modalMaxTok').focus();
