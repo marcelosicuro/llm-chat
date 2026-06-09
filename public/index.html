@@ -39,6 +39,12 @@
       gap: 5px; transition: background .15s;
     }
     .btn-new:hover { background: #1e3a5f; }
+    .btn-clear-all {
+      background: none; border: 1px solid #2a1a1a; color: #4b2a2a;
+      border-radius: 7px; padding: 5px 8px; font-size: .72rem;
+      cursor: pointer; transition: all .15s;
+    }
+    .btn-clear-all:hover { background: #2a1515; border-color: #5a2d2d; color: #f87171; }
 
     /* ── Lista de conversas ──────────────────────────────── */
     #convList {
@@ -412,9 +418,14 @@
 
     <div class="sb-header">
       <span class="sb-title">Conversas</span>
-      <button class="btn-new" onclick="newConversation()">
-        <i class="fas fa-plus"></i> Nova
-      </button>
+      <div class="d-flex gap-2">
+        <button class="btn-clear-all" onclick="clearAllConversations()" title="Apagar todas as conversas">
+          <i class="fas fa-trash"></i>
+        </button>
+        <button class="btn-new" onclick="newConversation()">
+          <i class="fas fa-plus"></i> Nova
+        </button>
+      </div>
     </div>
 
     <div id="convList">
@@ -735,6 +746,24 @@
         '<div class="empty" id="empty"><i class="fas fa-robot"></i><p>Crie ou selecione uma conversa</p></div>';
     }
     loadList();
+  }
+
+  // ── Apagar todas as conversas ────────────────────────────
+  async function clearAllConversations() {
+    const list = await fetch('/conversations').then(r => r.json());
+    if (!list.length) { showToast('Nenhuma conversa para apagar'); return; }
+    if (!confirm(`Apagar todas as ${list.length} conversa(s)? Esta ação não pode ser desfeita.`)) return;
+
+    await Promise.all(list.map(c => fetch(`/conversations/${c.id}`, { method: 'DELETE' })));
+
+    currentId = null;
+    context   = null;
+    removeAttachmentPreview();
+    document.getElementById('convTitle').value = 'Nova conversa';
+    document.getElementById('msgs').innerHTML =
+      '<div class="empty" id="empty"><i class="fas fa-robot"></i><p>Crie ou selecione uma conversa</p></div>';
+    loadList();
+    showToast('Todas as conversas apagadas');
   }
 
   // ── Exportar conversa para clipboard ─────────────────────
