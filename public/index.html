@@ -237,6 +237,10 @@
       cursor: pointer; padding: 0 2px; font-size: .8rem; flex-shrink: 0;
     }
     #contextBar .btn-ctx-rm:hover { opacity: 1; color: #f87171; }
+    #ctxThumb {
+      width: 32px; height: 32px; border-radius: 5px;
+      object-fit: cover; flex-shrink: 0; border: 1px solid #1a3a24;
+    }
 
     .input-wrap {
       display: flex; align-items: flex-end; gap: 8px;
@@ -369,7 +373,8 @@
     <div class="input-area">
       <!-- Faixa de contexto -->
       <div id="contextBar">
-        <i class="fas fa-paperclip"></i>
+        <img id="ctxThumb" style="display:none" alt="">
+        <i id="ctxIcon" class="fas fa-paperclip"></i>
         <span class="ctx-name" id="ctxName"></span>
         <button class="btn-ctx-rm" onclick="clearContext()" title="Remover contexto">
           <i class="fas fa-times"></i>
@@ -383,7 +388,7 @@
           <i class="fas fa-paperclip"></i>
         </button>
         <input type="file" id="fileInput" style="display:none"
-               accept=".txt,.md,.json,.csv,.xml,.js,.ts,.py,.html,.css,.log,.yaml,.yml,.sql,.pdf"
+               accept=".txt,.md,.json,.csv,.xml,.js,.ts,.py,.html,.css,.log,.yaml,.yml,.sql,.pdf,.jpg,.jpeg,.png,.gif,.webp"
                onchange="uploadContext(this)">
 
         <textarea id="txt" rows="1" placeholder="Digite sua mensagem…"
@@ -615,8 +620,15 @@
     if (systemParts.length) apiMessages.push({ role: 'system', content: systemParts.join('\n\n') });
     apiMessages.push(...history);
     if (context) {
-      apiMessages.push({ role: 'user',      content: `Arquivo "${context.name}":\n\`\`\`\n${context.text}\n\`\`\`` });
-      apiMessages.push({ role: 'assistant', content: 'Recebi o arquivo. O que você gostaria de saber ou fazer com ele?' });
+      if (context.isImage) {
+        apiMessages.push({
+          role: 'user',
+          content: [{ type: 'image_url', image_url: { url: `data:${context.mimeType};base64,${context.base64}` } }]
+        });
+      } else {
+        apiMessages.push({ role: 'user', content: `Arquivo "${context.name}":\n\`\`\`\n${context.text}\n\`\`\`` });
+      }
+      apiMessages.push({ role: 'assistant', content: 'Recebi. O que você gostaria de saber?' });
     }
     apiMessages.push({ role: 'user', content: text });
 
@@ -741,12 +753,24 @@
   }
 
   function renderContextBar() {
-    const bar = document.getElementById('contextBar');
+    const bar   = document.getElementById('contextBar');
+    const thumb = document.getElementById('ctxThumb');
+    const icon  = document.getElementById('ctxIcon');
     if (context) {
       document.getElementById('ctxName').textContent = context.name;
+      if (context.isImage) {
+        thumb.src = `data:${context.mimeType};base64,${context.base64}`;
+        thumb.style.display = 'inline-block';
+        icon.style.display  = 'none';
+      } else {
+        thumb.style.display = 'none';
+        icon.style.display  = 'inline';
+      }
       bar.style.display = 'flex';
     } else {
-      bar.style.display = 'none';
+      thumb.style.display = 'none';
+      icon.style.display  = 'inline';
+      bar.style.display   = 'none';
     }
   }
 

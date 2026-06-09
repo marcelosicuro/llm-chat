@@ -97,11 +97,23 @@ app.delete('/conversations/:id', (req, res) => {
 });
 
 // ── Upload de contexto ────────────────────────────────────────
+const IMAGE_EXTS = /\.(jpg|jpeg|png|gif|webp)$/i;
+const IMAGE_MIME = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+
 app.post('/upload-context', upload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'Nenhum arquivo enviado' });
   try {
+    const isImage = IMAGE_MIME.includes(req.file.mimetype) || IMAGE_EXTS.test(req.file.originalname);
+    const isPDF   = req.file.mimetype === 'application/pdf' || req.file.originalname.toLowerCase().endsWith('.pdf');
+
+    if (isImage) {
+      const mimeType = req.file.mimetype || 'image/jpeg';
+      const base64   = req.file.buffer.toString('base64');
+      return res.json({ name: req.file.originalname, size: req.file.size, isImage: true, mimeType, base64 });
+    }
+
     let text;
-    if (req.file.mimetype === 'application/pdf' || req.file.originalname.toLowerCase().endsWith('.pdf')) {
+    if (isPDF) {
       const data = await pdfParse(req.file.buffer);
       text = data.text;
       if (!text.trim()) return res.status(422).json({ error: 'Não foi possível extrair texto do PDF (pode ser escaneado ou protegido).' });
@@ -111,7 +123,8 @@ app.post('/upload-context', upload.single('file'), async (req, res) => {
     if (text.length > 24000)
       text = text.slice(0, 24000) + '\n\n[... conteúdo truncado ...]';
     res.json({ name: req.file.originalname, size: req.file.size, text });
-  } catch {
+  } catch (err) {
+    console.error('[upload]', err.message);
     res.status(422).json({ error: 'Não foi possível ler o arquivo.' });
   }
 });
