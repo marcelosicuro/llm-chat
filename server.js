@@ -5,6 +5,7 @@ const multer  = require('multer');
 const path    = require('path');
 const fs      = require('fs');
 const crypto  = require('crypto');
+const pdfParse = require('pdf-parse');
 
 const app     = express();
 const PORT    = process.env.PORT    || 4000;
@@ -82,15 +83,22 @@ app.delete('/conversations/:id', (req, res) => {
 });
 
 // ── Upload de contexto ────────────────────────────────────────
-app.post('/upload-context', upload.single('file'), (req, res) => {
+app.post('/upload-context', upload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'Nenhum arquivo enviado' });
   try {
-    let text = req.file.buffer.toString('utf8');
+    let text;
+    if (req.file.mimetype === 'application/pdf' || req.file.originalname.toLowerCase().endsWith('.pdf')) {
+      const data = await pdfParse(req.file.buffer);
+      text = data.text;
+      if (!text.trim()) return res.status(422).json({ error: 'Não foi possível extrair texto do PDF (pode ser escaneado ou protegido).' });
+    } else {
+      text = req.file.buffer.toString('utf8');
+    }
     if (text.length > 24000)
       text = text.slice(0, 24000) + '\n\n[... conteúdo truncado ...]';
     res.json({ name: req.file.originalname, size: req.file.size, text });
   } catch {
-    res.status(422).json({ error: 'Não foi possível ler o arquivo como texto' });
+    res.status(422).json({ error: 'Não foi possível ler o arquivo.' });
   }
 });
 
