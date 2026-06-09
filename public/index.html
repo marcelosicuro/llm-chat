@@ -165,6 +165,19 @@
     }
     .bubble.err { background: #2a1c1c; border-color: #5a2d2d; color: #f87171; }
 
+    .bubble-wrap { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+
+    .copy-btn {
+      opacity: 0; align-self: flex-start;
+      background: none; border: 1px solid #262626; color: #6b7280;
+      padding: 2px 8px; border-radius: 5px; cursor: pointer;
+      font-size: .63rem; display: flex; align-items: center; gap: 4px;
+      transition: opacity .15s, color .15s, border-color .15s;
+    }
+    .msg-row.model:hover .copy-btn { opacity: 1; }
+    .copy-btn:hover { color: #e5e7eb; border-color: #4b5563; }
+    .copy-btn.copied { color: #4ade80; border-color: #166534; opacity: 1; }
+
     .cursor {
       display: inline-block; width: 2px; height: .85em;
       background: #93c5fd; border-radius: 1px; margin-left: 2px;
@@ -528,12 +541,13 @@
 
     // Monta mensagens para a API
     const apiMessages = [];
-    let systemFull = sys;
+    if (sys.trim()) apiMessages.push({ role: 'system', content: sys.trim() });
+    apiMessages.push(...history);
     if (context) {
-      systemFull += `\n\n---\nContexto do arquivo "${context.name}":\n\`\`\`\n${context.text}\n\`\`\``;
+      apiMessages.push({ role: 'user',      content: `Arquivo "${context.name}":\n\`\`\`\n${context.text}\n\`\`\`` });
+      apiMessages.push({ role: 'assistant', content: 'Recebi o arquivo. O que você gostaria de saber ou fazer com ele?' });
     }
-    if (systemFull.trim()) apiMessages.push({ role: 'system', content: systemFull.trim() });
-    apiMessages.push(...history, { role: 'user', content: text });
+    apiMessages.push({ role: 'user', content: text });
 
     // UI
     addBubble('user', text);
@@ -692,7 +706,28 @@
     bubble.className = 'bubble';
     bubble.textContent = text;
     row.appendChild(av);
-    row.appendChild(bubble);
+    if (role === 'model') {
+      const wrap = document.createElement('div');
+      wrap.className = 'bubble-wrap';
+      const copyBtn = document.createElement('button');
+      copyBtn.className = 'copy-btn';
+      copyBtn.innerHTML = '<i class="fas fa-copy"></i> Copiar';
+      copyBtn.onclick = () => {
+        navigator.clipboard.writeText(bubble.textContent).then(() => {
+          copyBtn.innerHTML = '<i class="fas fa-check"></i> Copiado!';
+          copyBtn.classList.add('copied');
+          setTimeout(() => {
+            copyBtn.innerHTML = '<i class="fas fa-copy"></i> Copiar';
+            copyBtn.classList.remove('copied');
+          }, 1500);
+        });
+      };
+      wrap.appendChild(bubble);
+      wrap.appendChild(copyBtn);
+      row.appendChild(wrap);
+    } else {
+      row.appendChild(bubble);
+    }
     document.getElementById('msgs').appendChild(row);
     scrollEnd();
     return { bubble, row };
