@@ -76,22 +76,6 @@
     .conv-empty i { font-size: 1.8rem; display: block; margin-bottom: 8px; }
 
     /* ── Configurações (accordion) ───────────────────────── */
-    .sb-cfg-toggle {
-      padding: 10px 14px; border-top: 1px solid #1e1e1e;
-      font-size: .65rem; font-weight: 700; text-transform: uppercase;
-      letter-spacing: 1.2px; color: #374151; cursor: pointer;
-      display: flex; justify-content: space-between; align-items: center;
-      flex-shrink: 0; transition: color .15s;
-    }
-    .sb-cfg-toggle:hover { color: #6b7280; }
-    #cfgPanel {
-      border-top: 1px solid #1a1a1a; padding: 12px 14px;
-      display: flex; flex-direction: column; gap: 10px;
-      flex-shrink: 0; overflow-y: auto; max-height: 320px;
-    }
-    #cfgPanel::-webkit-scrollbar { width: 3px; }
-    #cfgPanel::-webkit-scrollbar-thumb { background: #222; }
-
     .cfg-label {
       font-size: .62rem; font-weight: 700; text-transform: uppercase;
       letter-spacing: .8px; color: #4b5563; margin-bottom: 4px;
@@ -110,21 +94,6 @@
     .temp-row { display: flex; justify-content: space-between; align-items: center; }
     .temp-val  { font-size: .7rem; color: #93c5fd; font-weight: 700; }
     input[type=range] { accent-color: #3b82f6; width: 100%; }
-
-    /* ── Memória ─────────────────────────────────────────── */
-    #memPanel {
-      border-top: 1px solid #1a1a1a; padding: 12px 14px;
-      display: flex; flex-direction: column; gap: 8px;
-      flex-shrink: 0;
-    }
-    #memPanel::-webkit-scrollbar { width: 3px; }
-    #memPanel textarea {
-      width: 100%; background: #191919; border: 1px solid #262626;
-      color: #e5e7eb; border-radius: 6px; padding: 5px 8px;
-      font-size: .76rem; outline: none; resize: vertical;
-      min-height: 80px; line-height: 1.4;
-    }
-    #memPanel textarea:focus { border-color: #a78bfa; }
     .mem-footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
     .mem-hint   { font-size: .6rem; color: #374151; }
     .btn-save-mem {
@@ -144,8 +113,16 @@
     .modal-overlay.open { display: flex; }
     .modal-box {
       background: #111; border: 1px solid #1e1e1e; border-radius: 12px;
-      width: 480px; max-width: 95vw; padding: 24px;
-      display: flex; flex-direction: column; gap: 18px;
+      width: 500px; max-width: 95vw; max-height: 92vh;
+      padding: 24px; display: flex; flex-direction: column; gap: 14px;
+      overflow-y: auto;
+    }
+    .modal-box::-webkit-scrollbar { width: 3px; }
+    .modal-box::-webkit-scrollbar-thumb { background: #222; }
+    .modal-section-title {
+      font-size: .62rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 1px; color: #374151;
+      border-top: 1px solid #1e1e1e; padding-top: 10px; margin-top: 2px;
     }
     .modal-header {
       display: flex; align-items: center; justify-content: space-between;
@@ -404,67 +381,63 @@
       <div class="conv-empty"><i class="fas fa-comments"></i>Nenhuma conversa ainda</div>
     </div>
 
-    <!-- Memória -->
-    <div class="sb-cfg-toggle" onclick="toggleMem()" id="memToggle">
-      <span><i class="fas fa-brain me-2"></i>Memória</span>
-      <i class="fas fa-chevron-up" id="memChevron" style="font-size:.65rem;"></i>
-    </div>
-    <div id="memPanel">
-      <textarea id="memText" placeholder="Escreva aqui o que o assistente deve sempre lembrar entre conversas…"></textarea>
-      <div class="mem-footer">
-        <span class="mem-hint">Injetado em toda conversa</span>
-        <button class="btn-save-mem" id="btnSaveMem" onclick="saveMemory()">Salvar</button>
-      </div>
-    </div>
-
-    <!-- Configurações rápidas -->
-    <div class="sb-cfg-toggle" style="cursor:default;">
-      <span><i class="fas fa-sliders me-2"></i>Configurações</span>
-    </div>
-    <div id="cfgPanel">
-      <div>
-        <div class="cfg-label">Modelo</div>
-        <select id="cfgModel" class="cfg-input">
-          <option value="">— reconectar para listar —</option>
-        </select>
-      </div>
-      <div>
-        <div class="cfg-label temp-row">
-          Temperatura <span class="temp-val" id="tempVal">0.7</span>
-        </div>
-        <input type="range" id="cfgTemp" min="0" max="2" step="0.05" value="0.7"
-               oninput="updateTemp(this.value)">
-        <div id="tempDesc" style="font-size:.62rem;color:#4b5563;margin-top:4px;line-height:1.4;"></div>
-      </div>
-    </div>
-
   </div>
 
   <!-- ══ MAIN ══════════════════════════════════════════════ -->
   <div class="main">
 
-    <!-- Modal de configurações avançadas -->
+    <!-- Modal de configurações -->
     <div class="modal-overlay" id="modalOverlay" onclick="closeModalOutside(event)">
       <div class="modal-box">
         <div class="modal-header">
-          <span class="modal-title"><i class="fas fa-sliders me-2"></i>Configurações avançadas</span>
+          <span class="modal-title"><i class="fas fa-sliders me-2"></i>Configurações</span>
           <button class="btn-modal-close" onclick="closeModal()"><i class="fas fa-times"></i></button>
+        </div>
+
+        <div class="modal-section-title">Modelo e comportamento</div>
+
+        <div>
+          <div class="cfg-label">Modelo</div>
+          <select id="cfgModel" class="cfg-input">
+            <option value="">— reconectar para listar —</option>
+          </select>
+        </div>
+        <div>
+          <div class="cfg-label temp-row">
+            Temperatura <span class="temp-val" id="tempVal">0.7</span>
+          </div>
+          <input type="range" id="cfgTemp" min="0" max="2" step="0.05" value="0.7"
+                 oninput="updateTemp(this.value)">
+          <div id="tempDesc" style="font-size:.62rem;color:#4b5563;margin-top:4px;line-height:1.4;"></div>
         </div>
         <div>
           <div class="cfg-label">Max tokens</div>
           <input id="modalMaxTok" class="cfg-input" type="number" value="4096" min="1" max="32768">
           <div style="font-size:.62rem;color:#374151;margin-top:4px;">
-            Máximo de tokens na resposta. Para modelos locais, valores entre 1024–8192 são mais seguros.
+            Máximo de tokens na resposta. Entre 1024–8192 é mais seguro para modelos locais.
           </div>
         </div>
         <div>
           <div class="cfg-label">System prompt</div>
-          <textarea id="modalSystem" class="cfg-input" rows="6"
+          <textarea id="modalSystem" class="cfg-input" rows="4"
             placeholder="Instrução inicial para o modelo…">Você é um assistente útil e conciso. Responda sempre em português do Brasil.</textarea>
         </div>
+
+        <div class="modal-section-title" style="margin-top:4px;">
+          <i class="fas fa-brain me-1"></i>Memória
+        </div>
+        <div>
+          <textarea id="memText" class="cfg-input" rows="5"
+            placeholder="Escreva aqui o que o assistente deve sempre lembrar entre conversas…"></textarea>
+          <div class="mem-footer" style="margin-top:6px;">
+            <span class="mem-hint">Injetado em toda conversa</span>
+            <button class="btn-save-mem" id="btnSaveMem" onclick="saveMemory()">Salvar memória</button>
+          </div>
+        </div>
+
         <div class="modal-footer">
           <button class="btn-modal-save" id="btnModalSave" onclick="saveModal()">
-            <i class="fas fa-check me-1"></i>Salvar
+            <i class="fas fa-check me-1"></i>Salvar configurações
           </button>
         </div>
       </div>
@@ -532,8 +505,6 @@
   let currentId        = null;   // id da conversa ativa
   let busy             = false;
   let context          = null;   // { name, text } — arquivo anexado
-  let cfgOpen          = true;
-  let memOpen          = true;
   let memory           = '';     // conteúdo de data/memory.md
   let availableModels  = [];     // modelos carregados no LM Studio
   let attachPreviewEl  = null;   // elemento DOM do preview de anexo na thread
@@ -559,13 +530,6 @@
     setTimeout(() => { btn.textContent = 'Salvar'; btn.classList.remove('saved'); }, 1500);
   }
 
-  function toggleMem() {
-    memOpen = !memOpen;
-    document.getElementById('memPanel').style.display = memOpen ? '' : 'none';
-    document.getElementById('memChevron').className =
-      memOpen ? 'fas fa-chevron-up' : 'fas fa-chevron-down';
-    document.getElementById('memChevron').style.fontSize = '.65rem';
-  }
 
   // ── Ping / detectar modelos ───────────────────────────────
   async function ping() {
@@ -1054,16 +1018,7 @@
     return row;
   }
 
-  // ── Accordion configurações ───────────────────────────────
-  function toggleCfg() {
-    cfgOpen = !cfgOpen;
-    document.getElementById('cfgPanel').style.display = cfgOpen ? '' : 'none';
-    document.getElementById('cfgChevron').className =
-      cfgOpen ? 'fas fa-chevron-up' : 'fas fa-chevron-down';
-    document.getElementById('cfgChevron').style.fontSize = '.65rem';
-  }
-
-  // Salva settings ao perder foco de campos de config
+  // Auto-salva settings ao mudar modelo ou temperatura
   ['cfgModel','cfgTemp'].forEach(id => {
     document.getElementById(id).addEventListener('change', saveSettings);
   });
@@ -1161,13 +1116,13 @@
   }
 
   async function saveModal() {
-    await saveSettings();
+    await Promise.all([saveSettings(), saveMemory()]);
     const btn = document.getElementById('btnModalSave');
     btn.classList.add('saved');
     btn.innerHTML = '<i class="fas fa-check me-1"></i>Salvo!';
     setTimeout(() => {
       btn.classList.remove('saved');
-      btn.innerHTML = '<i class="fas fa-check me-1"></i>Salvar';
+      btn.innerHTML = '<i class="fas fa-check me-1"></i>Salvar configurações';
       closeModal();
     }, 900);
   }
