@@ -778,8 +778,13 @@
     }
     apiMessages.push({ role: 'user', content: text });
 
-    // UI
-    removeAttachmentPreview();
+    // UI — finaliza o preview (remove o ✕, mantém na thread)
+    if (attachPreviewEl) {
+      attachPreviewEl.querySelector('.btn-remove-attach')?.remove();
+      attachPreviewEl = null;
+    }
+    context = null;
+    document.getElementById('btnUpload').innerHTML = '<i class="fas fa-paperclip"></i>';
     addBubble('user', text);
     input.value = '';
     resize(input);
