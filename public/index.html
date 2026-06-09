@@ -135,6 +135,42 @@
     .btn-save-mem:hover { background: #3b2660; }
     .btn-save-mem.saved { color: #4ade80; border-color: #166534; background: #14261a; }
 
+    /* ── Modal ───────────────────────────────────────────── */
+    .modal-overlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,.7); z-index: 100;
+      align-items: center; justify-content: center;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal-box {
+      background: #111; border: 1px solid #1e1e1e; border-radius: 12px;
+      width: 480px; max-width: 95vw; padding: 24px;
+      display: flex; flex-direction: column; gap: 18px;
+    }
+    .modal-header {
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .modal-title {
+      font-size: .8rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 1.2px; color: #6b7280;
+    }
+    .btn-modal-close {
+      background: none; border: none; color: #4b5563; cursor: pointer;
+      font-size: 1rem; padding: 2px 6px; border-radius: 4px;
+      transition: color .15s;
+    }
+    .btn-modal-close:hover { color: #e5e7eb; }
+    .modal-footer {
+      display: flex; justify-content: flex-end;
+    }
+    .btn-modal-save {
+      background: #1d4ed8; border: none; color: #fff;
+      padding: 7px 20px; border-radius: 7px; font-size: .8rem;
+      font-weight: 600; cursor: pointer; transition: background .15s;
+    }
+    .btn-modal-save:hover { background: #2563eb; }
+    .btn-modal-save.saved { background: #166534; }
+
     /* ── Topbar ──────────────────────────────────────────── */
     .topbar {
       background: #111; border-bottom: 1px solid #1e1e1e;
@@ -316,10 +352,9 @@
       </div>
     </div>
 
-    <!-- Configurações -->
-    <div class="sb-cfg-toggle" onclick="toggleCfg()" id="cfgToggle">
+    <!-- Configurações rápidas -->
+    <div class="sb-cfg-toggle" style="cursor:default;">
       <span><i class="fas fa-sliders me-2"></i>Configurações</span>
-      <i class="fas fa-chevron-up" id="cfgChevron" style="font-size:.65rem;"></i>
     </div>
     <div id="cfgPanel">
       <div>
@@ -336,21 +371,39 @@
                oninput="updateTemp(this.value)">
         <div id="tempDesc" style="font-size:.62rem;color:#4b5563;margin-top:4px;line-height:1.4;"></div>
       </div>
-      <div>
-        <div class="cfg-label">Max tokens</div>
-        <input id="cfgMaxTok" class="cfg-input" type="number" value="4096" min="1" max="32768">
-      </div>
-      <div>
-        <div class="cfg-label">System prompt</div>
-        <textarea id="cfgSystem" class="cfg-input"
-          placeholder="Instrução inicial...">Você é um assistente útil e conciso. Responda sempre em português do Brasil.</textarea>
-      </div>
     </div>
 
   </div>
 
   <!-- ══ MAIN ══════════════════════════════════════════════ -->
   <div class="main">
+
+    <!-- Modal de configurações avançadas -->
+    <div class="modal-overlay" id="modalOverlay" onclick="closeModalOutside(event)">
+      <div class="modal-box">
+        <div class="modal-header">
+          <span class="modal-title"><i class="fas fa-sliders me-2"></i>Configurações avançadas</span>
+          <button class="btn-modal-close" onclick="closeModal()"><i class="fas fa-times"></i></button>
+        </div>
+        <div>
+          <div class="cfg-label">Max tokens</div>
+          <input id="modalMaxTok" class="cfg-input" type="number" value="4096" min="1" max="32768">
+          <div style="font-size:.62rem;color:#374151;margin-top:4px;">
+            Máximo de tokens na resposta. Para modelos locais, valores entre 1024–8192 são mais seguros.
+          </div>
+        </div>
+        <div>
+          <div class="cfg-label">System prompt</div>
+          <textarea id="modalSystem" class="cfg-input" rows="6"
+            placeholder="Instrução inicial para o modelo…">Você é um assistente útil e conciso. Responda sempre em português do Brasil.</textarea>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-modal-save" id="btnModalSave" onclick="saveModal()">
+            <i class="fas fa-check me-1"></i>Salvar
+          </button>
+        </div>
+      </div>
+    </div>
 
     <!-- Topbar -->
     <div class="topbar">
@@ -359,6 +412,11 @@
              onchange="renameConversation(this.value)" placeholder="Título da conversa">
       <span id="modelChip" class="model-chip ms-1">verificando…</span>
       <div class="ms-auto d-flex gap-2">
+        <button onclick="openModal()" title="Configurações avançadas"
+          style="background:#191919;border:1px solid #262626;color:#6b7280;
+                 border-radius:6px;padding:4px 10px;font-size:.72rem;cursor:pointer;">
+          <i class="fas fa-gear"></i>
+        </button>
         <button onclick="ping()"
           style="background:#191919;border:1px solid #262626;color:#6b7280;
                  border-radius:6px;padding:4px 10px;font-size:.72rem;cursor:pointer;">
@@ -525,9 +583,9 @@
       sel.value = conv.model;
       document.getElementById('modelChip').textContent = conv.model;
     }
-    document.getElementById('cfgTemp').value    = conv.temperature  ?? 0.7;
-    document.getElementById('cfgMaxTok').value  = conv.maxTokens    ?? 512;
-    document.getElementById('cfgSystem').value  = conv.systemPrompt || '';
+    document.getElementById('cfgTemp').value      = conv.temperature  ?? 0.7;
+    document.getElementById('modalMaxTok').value  = conv.maxTokens    ?? 4096;
+    document.getElementById('modalSystem').value  = conv.systemPrompt || '';
     updateTemp(conv.temperature ?? 0.7);
 
     // Título
@@ -562,8 +620,8 @@
   async function newConversation() {
     const model  = document.getElementById('cfgModel').value.trim();
     const temp   = parseFloat(document.getElementById('cfgTemp').value);
-    const maxTok = parseInt(document.getElementById('cfgMaxTok').value);
-    const sys    = document.getElementById('cfgSystem').value.trim();
+    const maxTok = parseInt(document.getElementById('modalMaxTok').value) || 4096;
+    const sys    = document.getElementById('modalSystem').value.trim();
 
     const conv = await fetch('/conversations', {
       method: 'POST',
@@ -611,8 +669,8 @@
       body: JSON.stringify({
         model:        document.getElementById('cfgModel').value.trim(),
         temperature:  parseFloat(document.getElementById('cfgTemp').value),
-        maxTokens:    parseInt(document.getElementById('cfgMaxTok').value),
-        systemPrompt: document.getElementById('cfgSystem').value.trim()
+        maxTokens:    parseInt(document.getElementById('modalMaxTok').value) || 4096,
+        systemPrompt: document.getElementById('modalSystem').value.trim()
       })
     });
   }
@@ -631,8 +689,8 @@
 
     const model  = document.getElementById('cfgModel').value.trim();
     const temp   = parseFloat(document.getElementById('cfgTemp').value);
-    const maxTok = parseInt(document.getElementById('cfgMaxTok').value);
-    const sys    = document.getElementById('cfgSystem').value.trim();
+    const maxTok = parseInt(document.getElementById('modalMaxTok').value) || 4096;
+    const sys    = document.getElementById('modalSystem').value.trim();
 
     // Busca histórico atual da conversa
     const conv = await fetch(`/conversations/${currentId}`).then(r => r.json());
@@ -837,8 +895,8 @@
     document.getElementById('cfgChevron').style.fontSize = '.65rem';
   }
 
-  // Salva settings ao perder foco de qualquer campo de config
-  ['cfgModel','cfgMaxTok','cfgSystem','cfgTemp'].forEach(id => {
+  // Salva settings ao perder foco de campos de config
+  ['cfgModel','cfgTemp'].forEach(id => {
     document.getElementById(id).addEventListener('change', saveSettings);
   });
 
@@ -917,6 +975,32 @@
     if (diff < 3600000) return Math.floor(diff/60000) + 'min';
     if (diff < 86400000)return Math.floor(diff/3600000) + 'h';
     return d.toLocaleDateString('pt-BR', { day:'2-digit', month:'2-digit' });
+  }
+
+  // ── Modal de configurações avançadas ─────────────────────
+  function openModal() {
+    document.getElementById('modalOverlay').classList.add('open');
+    document.getElementById('modalMaxTok').focus();
+  }
+
+  function closeModal() {
+    document.getElementById('modalOverlay').classList.remove('open');
+  }
+
+  function closeModalOutside(e) {
+    if (e.target === document.getElementById('modalOverlay')) closeModal();
+  }
+
+  async function saveModal() {
+    await saveSettings();
+    const btn = document.getElementById('btnModalSave');
+    btn.classList.add('saved');
+    btn.innerHTML = '<i class="fas fa-check me-1"></i>Salvo!';
+    setTimeout(() => {
+      btn.classList.remove('saved');
+      btn.innerHTML = '<i class="fas fa-check me-1"></i>Salvar';
+      closeModal();
+    }, 900);
   }
 
   // ── Temperatura ───────────────────────────────────────────

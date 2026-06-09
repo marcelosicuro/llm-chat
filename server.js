@@ -151,30 +151,17 @@ app.all('/llm/*', async (req, res) => {
       res.setHeader('X-Accel-Buffering', 'no');
       res.flushHeaders();
       const reader = upstream.body.getReader();
-      const dec = new TextDecoder();
-      let sseLog = '';
       try {
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
-          const chunk = dec.decode(value, { stream: true });
-          sseLog += chunk;
           await new Promise((ok, fail) => res.write(value, e => e ? fail(e) : ok()));
         }
       } catch { /* cliente desconectou */ }
-      // Loga as últimas linhas SSE para diagnóstico
-      const lines = sseLog.split('\n').filter(l => l.startsWith('data:') && l !== 'data: [DONE]');
-      if (lines.length === 0) {
-        console.log('[proxy sse] stream vazio — raw:', sseLog.slice(0, 300));
-      } else {
-        console.log('[proxy sse] %d chunks, último: %s', lines.length, lines[lines.length - 1]?.slice(0, 200));
-      }
       return res.end();
     }
 
     const rawBuf = Buffer.from(await upstream.arrayBuffer());
-    console.log('[proxy non-sse] status=%d ct=%s body=%s',
-      upstream.status, ct, rawBuf.toString('utf8').slice(0, 500));
     res.end(rawBuf);
   } catch (err) {
     console.error('[proxy]', err.message);
