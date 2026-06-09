@@ -338,7 +338,7 @@
       </div>
       <div>
         <div class="cfg-label">Max tokens</div>
-        <input id="cfgMaxTok" class="cfg-input" type="number" value="100000" min="1" max="200000">
+        <input id="cfgMaxTok" class="cfg-input" type="number" value="4096" min="1" max="32768">
       </div>
       <div>
         <div class="cfg-label">System prompt</div>
@@ -731,15 +731,25 @@
       cur.remove();
       bubble.textContent = reply || '(sem resposta)';
 
-      // Salva histórico completo + auto-título na 1ª troca
-      const finalHistory = [...newHistory, { role: 'assistant', content: reply }];
-      const patch = { messages: finalHistory };
-      if (isFirst) patch.title = text.slice(0, 50) + (text.length > 50 ? '…' : '');
-      await fetch(`/conversations/${currentId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(patch)
-      });
+      // Só salva no histórico se houver resposta real — evita corromper contexto
+      if (reply.trim()) {
+        const finalHistory = [...newHistory, { role: 'assistant', content: reply }];
+        const patch = { messages: finalHistory };
+        if (isFirst) patch.title = text.slice(0, 50) + (text.length > 50 ? '…' : '');
+        await fetch(`/conversations/${currentId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(patch)
+        });
+      } else if (isFirst) {
+        // Se for a 1ª mensagem e não teve resposta, salva só o título
+        const patch = { title: text.slice(0, 50) + (text.length > 50 ? '…' : '') };
+        await fetch(`/conversations/${currentId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(patch)
+        });
+      }
 
       if (isFirst) {
         document.getElementById('convTitle').value = patch.title;
