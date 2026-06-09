@@ -790,27 +790,31 @@
       bubble.textContent = reply || '(sem resposta)';
 
       // Só salva no histórico se houver resposta real — evita corromper contexto
+      let newTitle = null;
       if (reply.trim()) {
         const finalHistory = [...newHistory, { role: 'assistant', content: reply }];
-        const patch = { messages: finalHistory };
-        if (isFirst) patch.title = text.slice(0, 50) + (text.length > 50 ? '…' : '');
+        const patchBody = { messages: finalHistory };
+        if (isFirst) {
+          newTitle = text.slice(0, 50) + (text.length > 50 ? '…' : '');
+          patchBody.title = newTitle;
+        }
         await fetch(`/conversations/${currentId}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(patch)
+          body: JSON.stringify(patchBody)
         });
       } else if (isFirst) {
         // Se for a 1ª mensagem e não teve resposta, salva só o título
-        const patch = { title: text.slice(0, 50) + (text.length > 50 ? '…' : '') };
+        newTitle = text.slice(0, 50) + (text.length > 50 ? '…' : '');
         await fetch(`/conversations/${currentId}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(patch)
+          body: JSON.stringify({ title: newTitle })
         });
       }
 
-      if (isFirst) {
-        document.getElementById('convTitle').value = patch.title;
+      if (isFirst && newTitle) {
+        document.getElementById('convTitle').value = newTitle;
         loadList();
       }
 
