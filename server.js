@@ -31,6 +31,20 @@ const upload = multer({
   limits: { fileSize: 10 * 1024 * 1024 }
 });
 
+// ── Memória global ───────────────────────────────────────────────
+const MEM_FILE = path.join(DATA_DIR, 'memory.md');
+if (!fs.existsSync(MEM_FILE)) fs.writeFileSync(MEM_FILE, '');
+
+app.get('/memory', (req, res) => {
+  res.json({ text: fs.readFileSync(MEM_FILE, 'utf8') });
+});
+
+app.patch('/memory', (req, res) => {
+  const text = typeof req.body.text === 'string' ? req.body.text : '';
+  fs.writeFileSync(MEM_FILE, text);
+  res.json({ ok: true });
+});
+
 // ── Conversas ─────────────────────────────────────────────────
 // Lista (só metadados, sem messages para não pesar)
 app.get('/conversations', (req, res) => {

@@ -107,6 +107,30 @@
     .temp-val  { font-size: .7rem; color: #93c5fd; font-weight: 700; }
     input[type=range] { accent-color: #3b82f6; width: 100%; }
 
+    /* ── Memória ─────────────────────────────────────────── */
+    #memPanel {
+      border-top: 1px solid #1a1a1a; padding: 12px 14px;
+      display: flex; flex-direction: column; gap: 8px;
+      flex-shrink: 0;
+    }
+    #memPanel::-webkit-scrollbar { width: 3px; }
+    #memPanel textarea {
+      width: 100%; background: #191919; border: 1px solid #262626;
+      color: #e5e7eb; border-radius: 6px; padding: 5px 8px;
+      font-size: .76rem; outline: none; resize: vertical;
+      min-height: 80px; line-height: 1.4;
+    }
+    #memPanel textarea:focus { border-color: #a78bfa; }
+    .mem-footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .mem-hint   { font-size: .6rem; color: #374151; }
+    .btn-save-mem {
+      background: #2d1f4a; border: 1px solid #4c3680; color: #a78bfa;
+      border-radius: 6px; padding: 4px 12px; font-size: .7rem;
+      font-weight: 600; cursor: pointer; transition: background .15s;
+    }
+    .btn-save-mem:hover { background: #3b2660; }
+    .btn-save-mem.saved { color: #4ade80; border-color: #166534; background: #14261a; }
+
     /* ── Topbar ──────────────────────────────────────────── */
     .topbar {
       background: #111; border-bottom: 1px solid #1e1e1e;
@@ -271,6 +295,19 @@
       <div class="conv-empty"><i class="fas fa-comments"></i>Nenhuma conversa ainda</div>
     </div>
 
+    <!-- Memória -->
+    <div class="sb-cfg-toggle" onclick="toggleMem()" id="memToggle">
+      <span><i class="fas fa-brain me-2"></i>Memória</span>
+      <i class="fas fa-chevron-up" id="memChevron" style="font-size:.65rem;"></i>
+    </div>
+    <div id="memPanel">
+      <textarea id="memText" placeholder="Escreva aqui o que o assistente deve sempre lembrar entre conversas…"></textarea>
+      <div class="mem-footer">
+        <span class="mem-hint">Injetado em toda conversa</span>
+        <button class="btn-save-mem" id="btnSaveMem" onclick="saveMemory()">Salvar</button>
+      </div>
+    </div>
+
     <!-- Configurações -->
     <div class="sb-cfg-toggle" onclick="toggleCfg()" id="cfgToggle">
       <span><i class="fas fa-sliders me-2"></i>Configurações</span>
@@ -368,6 +405,37 @@
   let busy       = false;
   let context    = null;   // { name, text } — arquivo anexado
   let cfgOpen    = true;
+  let memOpen    = true;
+  let memory     = '';     // conteúdo de data/memory.md
+
+  // ── Memória global ────────────────────────────────────────
+  async function loadMemory() {
+    const r = await fetch('/memory');
+    const j = await r.json();
+    memory = j.text || '';
+    document.getElementById('memText').value = memory;
+  }
+
+  async function saveMemory() {
+    memory = document.getElementById('memText').value;
+    await fetch('/memory', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: memory })
+    });
+    const btn = document.getElementById('btnSaveMem');
+    btn.textContent = 'Salvo!';
+    btn.classList.add('saved');
+    setTimeout(() => { btn.textContent = 'Salvar'; btn.classList.remove('saved'); }, 1500);
+  }
+
+  function toggleMem() {
+    memOpen = !memOpen;
+    document.getElementById('memPanel').style.display = memOpen ? '' : 'none';
+    document.getElementById('memChevron').className =
+      memOpen ? 'fas fa-chevron-up' : 'fas fa-chevron-down';
+    document.getElementById('memChevron').style.fontSize = '.65rem';
+  }
 
   // ── Ping / detectar modelo ────────────────────────────────
   async function ping() {
@@ -541,7 +609,10 @@
 
     // Monta mensagens para a API
     const apiMessages = [];
-    if (sys.trim()) apiMessages.push({ role: 'system', content: sys.trim() });
+    const systemParts = [];
+    if (memory.trim()) systemParts.push(`## Memória\n${memory.trim()}`);
+    if (sys.trim())    systemParts.push(sys.trim());
+    if (systemParts.length) apiMessages.push({ role: 'system', content: systemParts.join('\n\n') });
     apiMessages.push(...history);
     if (context) {
       apiMessages.push({ role: 'user',      content: `Arquivo "${context.name}":\n\`\`\`\n${context.text}\n\`\`\`` });
@@ -785,7 +856,7 @@
 
   // ── Init ──────────────────────────────────────────────────
   (async () => {
-    await ping();
+    await Promise.all([ping(), loadMemory()]);
     const list = await loadList();
     // Abre a conversa mais recente automaticamente
     if (list.length) selectConversation(list[0].id);
