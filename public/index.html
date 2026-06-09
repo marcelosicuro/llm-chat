@@ -275,21 +275,76 @@
     }
 
     /* Faixa de contexto */
-    #contextBar {
-      display: none; align-items: center; gap: 8px;
-      background: #14261a; border: 1px solid #1a3a24;
-      border-radius: 8px; padding: 6px 12px; margin-bottom: 8px;
-      font-size: .75rem; color: #4ade80;
+    /* Indicador de anexo no botão de upload */
+    .btn-upload { position: relative; }
+    .btn-upload .attach-dot {
+      position: absolute; top: 2px; right: 2px; width: 7px; height: 7px;
+      background: #4ade80; border-radius: 50%; border: 1px solid #111;
     }
-    #contextBar .ctx-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    #contextBar .btn-ctx-rm {
-      background: none; border: none; color: #4ade80; opacity: .7;
-      cursor: pointer; padding: 0 2px; font-size: .8rem; flex-shrink: 0;
+
+    /* Preview de anexo na thread de mensagens */
+    .attach-preview-row {
+      display: flex; justify-content: flex-end;
+      padding: 2px 16px 6px;
     }
-    #contextBar .btn-ctx-rm:hover { opacity: 1; color: #f87171; }
-    #ctxThumb {
-      width: 32px; height: 32px; border-radius: 5px;
-      object-fit: cover; flex-shrink: 0; border: 1px solid #1a3a24;
+    .attach-preview-bubble {
+      position: relative; background: #14261a; border: 1px solid #1a3a24;
+      border-radius: 12px 12px 4px 12px; padding: 8px; max-width: 280px;
+    }
+    .attach-preview-bubble img {
+      display: block; max-width: 260px; max-height: 180px;
+      border-radius: 7px; object-fit: cover;
+    }
+    .attach-preview-bubble .attach-file-card {
+      display: flex; align-items: center; gap: 8px;
+      color: #4ade80; font-size: .78rem; padding: 2px 4px;
+    }
+    .attach-preview-bubble .attach-file-card i { font-size: 1.1rem; flex-shrink: 0; }
+    .attach-preview-bubble .attach-name {
+      font-size: .65rem; color: #4b5563; margin-top: 4px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 240px;
+    }
+    .btn-remove-attach {
+      position: absolute; top: -7px; right: -7px;
+      width: 18px; height: 18px; border-radius: 50%;
+      background: #374151; border: 1px solid #4b5563;
+      color: #9ca3af; font-size: .6rem; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      line-height: 1; padding: 0;
+    }
+    .btn-remove-attach:hover { background: #dc2626; color: #fff; border-color: #dc2626; }
+
+    /* Indicador "pensando" */
+    .thinking-bubble {
+      background: #1a1a1a; border: 1px solid #262626;
+      border-radius: 16px 16px 16px 4px;
+      padding: 10px 16px; display: flex; align-items: center; gap: 10px;
+    }
+    .thinking-dots { display: flex; gap: 5px; }
+    .thinking-dots span {
+      width: 7px; height: 7px; border-radius: 50%; background: #4b5563;
+      animation: tdot .9s ease-in-out infinite;
+    }
+    .thinking-dots span:nth-child(2) { animation-delay: .18s; }
+    .thinking-dots span:nth-child(3) { animation-delay: .36s; }
+    @keyframes tdot {
+      0%,60%,100% { transform: translateY(0); opacity: .35; }
+      30%          { transform: translateY(-5px); opacity: 1; background: #6b7280; }
+    }
+    .thinking-label { font-size: .72rem; color: #4b5563; }
+
+    /* Barra de progresso no topo do main */
+    .main { position: relative; }
+    .progress-bar {
+      display: none; position: absolute; top: 0; left: 0; right: 0; height: 2px; z-index: 10;
+      background: linear-gradient(90deg, transparent 0%, #3b82f6 40%, #8b5cf6 60%, transparent 100%);
+      background-size: 200% 100%;
+      animation: pbar 1.4s linear infinite;
+    }
+    .main.busy .progress-bar { display: block; }
+    @keyframes pbar {
+      0%   { background-position: 100% 0; }
+      100% { background-position: -100% 0; }
     }
 
     .input-wrap {
@@ -435,6 +490,9 @@
       </div>
     </div>
 
+    <!-- Barra de progresso -->
+    <div class="progress-bar"></div>
+
     <!-- Mensagens -->
     <div id="msgs">
       <div class="empty" id="empty">
@@ -445,19 +503,10 @@
 
     <!-- Input -->
     <div class="input-area">
-      <!-- Faixa de contexto -->
-      <div id="contextBar">
-        <img id="ctxThumb" style="display:none" alt="">
-        <i id="ctxIcon" class="fas fa-paperclip"></i>
-        <span class="ctx-name" id="ctxName"></span>
-        <button class="btn-ctx-rm" onclick="clearContext()" title="Remover contexto">
-          <i class="fas fa-times"></i>
-        </button>
-      </div>
-
       <div class="input-wrap">
         <!-- Upload -->
-        <button class="btn-upload" onclick="document.getElementById('fileInput').click()"
+        <button class="btn-upload" id="btnUpload"
+                onclick="document.getElementById('fileInput').click()"
                 title="Anexar arquivo como contexto">
           <i class="fas fa-paperclip"></i>
         </button>
@@ -480,13 +529,14 @@
 
 <script>
   // ── Estado global ─────────────────────────────────────────
-  let currentId       = null;   // id da conversa ativa
-  let busy            = false;
-  let context         = null;   // { name, text } — arquivo anexado
-  let cfgOpen         = true;
-  let memOpen         = true;
-  let memory          = '';     // conteúdo de data/memory.md
-  let availableModels = [];     // modelos carregados no LM Studio
+  let currentId        = null;   // id da conversa ativa
+  let busy             = false;
+  let context          = null;   // { name, text } — arquivo anexado
+  let cfgOpen          = true;
+  let memOpen          = true;
+  let memory           = '';     // conteúdo de data/memory.md
+  let availableModels  = [];     // modelos carregados no LM Studio
+  let attachPreviewEl  = null;   // elemento DOM do preview de anexo na thread
 
   // ── Memória global ────────────────────────────────────────
   async function loadMemory() {
@@ -729,13 +779,11 @@
     apiMessages.push({ role: 'user', content: text });
 
     // UI
+    removeAttachmentPreview();
     addBubble('user', text);
     input.value = '';
     resize(input);
-    const { bubble } = addBubble('model', '');
-    const cur = document.createElement('span');
-    cur.className = 'cursor';
-    bubble.appendChild(cur);
+    const thinkingRow = addThinking(!!context?.isImage);
     setBusy(true);
 
     // Salva mensagem do usuário
@@ -760,6 +808,15 @@
       const dec    = new TextDecoder();
       let   reply  = '';
       let   buf    = '';
+      let   bubble = null;   // criado no 1º token para substituir o thinking
+
+      function getOrCreateBubble() {
+        if (!bubble) {
+          thinkingRow.remove();
+          ({ bubble } = addBubble('model', ''));
+        }
+        return bubble;
+      }
 
       if (ct.includes('text/event-stream')) {
         // ── Streaming SSE ──────────────────────────────────
@@ -775,10 +832,11 @@
             if (data === '[DONE]') break;
             try {
               const delta = JSON.parse(data).choices?.[0]?.delta?.content ?? '';
-              reply += delta;
-              bubble.textContent = reply;
-              bubble.appendChild(cur);
-              scrollEnd();
+              if (delta) {
+                reply += delta;
+                getOrCreateBubble().textContent = reply;
+                scrollEnd();
+              }
             } catch { }
           }
         }
@@ -798,8 +856,12 @@
         } catch { reply = buf; }
       }
 
-      cur.remove();
-      bubble.textContent = reply || '(sem resposta)';
+      thinkingRow.remove();
+      if (!bubble) {
+        ({ bubble } = addBubble('model', reply || '(sem resposta)'));
+      } else {
+        bubble.textContent = reply || '(sem resposta)';
+      }
 
       // Só salva no histórico se houver resposta real — evita corromper contexto
       let newTitle = null;
@@ -831,9 +893,9 @@
       }
 
     } catch (err) {
-      cur.remove();
-      bubble.textContent = '⚠ ' + err.message;
-      bubble.classList.add('err');
+      thinkingRow.remove();
+      const { bubble: errBubble } = addBubble('model', '⚠ ' + err.message);
+      errBubble.classList.add('err');
     }
 
     setBusy(false);
@@ -911,7 +973,7 @@
 
   function clearContext() {
     context = null;
-    renderContextBar();
+    removeAttachmentPreview();
     if (currentId) {
       fetch(`/conversations/${currentId}`, {
         method: 'PATCH',
@@ -921,26 +983,70 @@
     }
   }
 
-  function renderContextBar() {
-    const bar   = document.getElementById('contextBar');
-    const thumb = document.getElementById('ctxThumb');
-    const icon  = document.getElementById('ctxIcon');
-    if (context) {
-      document.getElementById('ctxName').textContent = context.name;
-      if (context.isImage) {
-        thumb.src = `data:${context.mimeType};base64,${context.base64}`;
-        thumb.style.display = 'inline-block';
-        icon.style.display  = 'none';
-      } else {
-        thumb.style.display = 'none';
-        icon.style.display  = 'inline';
-      }
-      bar.style.display = 'flex';
+  // ── Preview de anexo na thread ───────────────────────────
+  function showAttachmentPreview() {
+    removeAttachmentPreview();
+    document.getElementById('empty')?.remove();
+    const msgs = document.getElementById('msgs');
+    const row  = document.createElement('div');
+    row.className = 'attach-preview-row';
+    if (context.isImage) {
+      row.innerHTML = `
+        <div class="attach-preview-bubble">
+          <img src="data:${context.mimeType};base64,${context.base64}" alt="">
+          <div class="attach-name">${esc(context.name)}</div>
+          <button class="btn-remove-attach" onclick="clearContext()" title="Remover">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>`;
     } else {
-      thumb.style.display = 'none';
-      icon.style.display  = 'inline';
-      bar.style.display   = 'none';
+      row.innerHTML = `
+        <div class="attach-preview-bubble">
+          <div class="attach-file-card">
+            <i class="fas fa-file-alt"></i>
+            <span>${esc(context.name)}</span>
+          </div>
+          <button class="btn-remove-attach" onclick="clearContext()" title="Remover">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>`;
     }
+    msgs.appendChild(row);
+    attachPreviewEl = row;
+    // Ponto verde no botão de upload
+    document.getElementById('btnUpload').innerHTML =
+      '<i class="fas fa-paperclip"></i><span class="attach-dot"></span>';
+    scrollEnd();
+  }
+
+  function removeAttachmentPreview() {
+    attachPreviewEl?.remove();
+    attachPreviewEl = null;
+    document.getElementById('btnUpload').innerHTML =
+      '<i class="fas fa-paperclip"></i>';
+  }
+
+  // Mantém compatibilidade com chamadas antigas
+  function renderContextBar() {
+    if (context) showAttachmentPreview();
+    else removeAttachmentPreview();
+  }
+
+  // ── Indicador "pensando" ──────────────────────────────────
+  function addThinking(isImage) {
+    const msgs = document.getElementById('msgs');
+    const row  = document.createElement('div');
+    row.className = 'msg-row model';
+    const label = isImage ? 'Analisando imagem…' : 'Pensando…';
+    row.innerHTML = `
+      <div class="avatar"><i class="fas fa-robot"></i></div>
+      <div class="thinking-bubble">
+        <div class="thinking-dots"><span></span><span></span><span></span></div>
+        <span class="thinking-label">${label}</span>
+      </div>`;
+    msgs.appendChild(row);
+    scrollEnd();
+    return row;
   }
 
   // ── Accordion configurações ───────────────────────────────
@@ -1009,6 +1115,7 @@
     btn.innerHTML = v
       ? '<i class="fas fa-spinner fa-spin" style="font-size:.75rem;"></i>'
       : '<i class="fas fa-paper-plane" style="font-size:.75rem;"></i>';
+    document.querySelector('.main').classList.toggle('busy', v);
   }
 
   function resize(el) {
