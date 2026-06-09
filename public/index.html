@@ -490,7 +490,12 @@
              onchange="renameConversation(this.value)" placeholder="Título da conversa">
       <span id="modelChip" class="model-chip ms-1">verificando…</span>
       <div class="ms-auto d-flex gap-2">
-        <button onclick="openModal()" title="Configurações avançadas"
+        <button onclick="exportChat(this)" title="Copiar conversa para área de transferência"
+          style="background:#191919;border:1px solid #262626;color:#6b7280;
+                 border-radius:6px;padding:4px 10px;font-size:.72rem;cursor:pointer;">
+          <i class="fas fa-copy me-1"></i>Exportar
+        </button>
+        <button onclick="openModal()" title="Configurações"
           style="background:#191919;border:1px solid #262626;color:#6b7280;
                  border-radius:6px;padding:4px 10px;font-size:.72rem;cursor:pointer;">
           <i class="fas fa-gear"></i>
@@ -730,6 +735,37 @@
         '<div class="empty" id="empty"><i class="fas fa-robot"></i><p>Crie ou selecione uma conversa</p></div>';
     }
     loadList();
+  }
+
+  // ── Exportar conversa para clipboard ─────────────────────
+  async function exportChat(btn) {
+    if (!currentId) { showToast('Nenhuma conversa ativa'); return; }
+
+    const conv = await fetch(`/conversations/${currentId}`).then(r => r.json());
+    const msgs = conv.messages || [];
+    if (!msgs.length) { showToast('Conversa vazia'); return; }
+
+    // Converte markdown para texto plano usando o DOM
+    function toPlain(md) {
+      const div = document.createElement('div');
+      div.innerHTML = renderMd(md);
+      return div.textContent.trim();
+    }
+
+    const modelName = document.getElementById('cfgModel').value || 'Assistente';
+    const header = `— ${conv.title} —\n\n`;
+    const body = msgs.map(m => {
+      const who  = m.role === 'user' ? 'Você' : modelName;
+      const text = m.role === 'user' ? m.content : toPlain(m.content);
+      return `${who}:\n${text}`;
+    }).join('\n\n');
+
+    await navigator.clipboard.writeText(header + body);
+
+    const orig = btn.innerHTML;
+    btn.innerHTML = '<i class="fas fa-check me-1"></i>Copiado!';
+    btn.style.color = '#4ade80';
+    setTimeout(() => { btn.innerHTML = orig; btn.style.color = ''; }, 2000);
   }
 
   // ── Salvar configurações da conversa ──────────────────────
