@@ -861,9 +861,11 @@
     const text  = input.value.trim();
     if (!text) return;
 
-    // ── Geração de imagem via /img ────────────────────────
-    const IMG_PREFIX = /^\/img\s+/i;
-    if (IMG_PREFIX.test(text)) {
+    // ── Geração de imagem via /img ou linguagem natural ──────
+    const IMG_PREFIX  = /^\/img\s+/i;
+    const IMG_INTENT  = /^(cri[ae]|ger[ae]|gen[ae]r[ae]|desenh[ae]|ilustr[ae]|fa[çc][ao]|pint[ae]|mostr[ae])\b.*(imagem|foto|figura|ilustra[çc][aã]o|desenho|retrato|picture|image)?/i;
+    const isImgIntent = IMG_PREFIX.test(text) || IMG_INTENT.test(text);
+    if (isImgIntent) {
       const imgPrompt = text.replace(IMG_PREFIX, '').trim();
       if (!currentId) await newConversation();
       document.getElementById('empty')?.remove();
