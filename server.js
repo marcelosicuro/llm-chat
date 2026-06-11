@@ -158,15 +158,43 @@ function buildFluxWorkflow(prompt, seed) {
   };
 }
 
+async function translatePrompt(text) {
+  try {
+    const r = await fetch(`${LLM_URL}/v1/chat/completions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: '',
+        messages: [
+          { role: 'system', content: 'You are an image prompt optimizer. Translate the user\'s description to English and rewrite it as a detailed, vivid Stable Diffusion / Flux prompt. Reply with ONLY the optimized prompt, no explanation, no quotes.' },
+          { role: 'user', content: text }
+        ],
+        temperature: 0.4,
+        max_tokens: 200,
+        stream: false
+      })
+    });
+    if (!r.ok) return text;
+    const j = await r.json();
+    const translated = j.choices?.[0]?.message?.content?.trim();
+    return translated || text;
+  } catch {
+    return text;
+  }
+}
+
 app.post('/image', async (req, res) => {
   if (!COMFY_URL) return res.status(503).json({ error: 'COMFY_URL não configurado no .env' });
   const { prompt, seed } = req.body;
   if (!prompt?.trim()) return res.status(400).json({ error: 'prompt obrigatório' });
   try {
+    const optimizedPrompt = await translatePrompt(prompt.trim());
+    console.log(`[image] prompt original: ${prompt.trim()}`);
+    console.log(`[image] prompt otimizado: ${optimizedPrompt}`);
     const submitResp = await fetch(`${COMFY_URL}/prompt`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt: buildFluxWorkflow(prompt.trim(), seed) })
+      body: JSON.stringify({ prompt: buildFluxWorkflow(optimizedPrompt, seed) })
     });
     if (!submitResp.ok) throw new Error('ComfyUI recusou o workflow: HTTP ' + submitResp.status);
     const { prompt_id } = await submitResp.json();
