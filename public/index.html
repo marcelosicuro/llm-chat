@@ -591,7 +591,7 @@
           <i class="fas fa-paper-plane" style="font-size:.75rem;"></i>
         </button>
       </div>
-      <p class="hint">Enter para enviar · Shift+Enter para quebrar linha</p>
+      <p class="hint">Enter para enviar · Shift+Enter para quebrar linha · <code style="background:#1a1a1a;padding:1px 5px;border-radius:3px;font-size:.6rem;color:#6b7280">/img &lt;prompt&gt;</code> para gerar imagem</p>
     </div>
 
   </div>
@@ -861,6 +861,44 @@
     const text  = input.value.trim();
     if (!text) return;
 
+    // ── Geração de imagem via /img ────────────────────────
+    const IMG_PREFIX = /^\/img\s+/i;
+    if (IMG_PREFIX.test(text)) {
+      const imgPrompt = text.replace(IMG_PREFIX, '').trim();
+      if (!currentId) await newConversation();
+      document.getElementById('empty')?.remove();
+      addBubble('user', text);
+      input.value = ''; resize(input);
+      const thinkingRow = addThinking('image');
+      setBusy(true);
+      const conv0    = await fetch(`/conversations/${currentId}`).then(r => r.json());
+      const history0 = conv0.messages || [];
+      const isFirst0 = history0.length === 0;
+      try {
+        const resp = await fetch('/image', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ prompt: imgPrompt })
+        });
+        if (!resp.ok) { const e = await resp.json().catch(() => ({})); throw new Error(e.error ?? 'HTTP ' + resp.status); }
+        const { image } = await resp.json();
+        thinkingRow.remove();
+        const imgContent = `![imagem gerada](${image})`;
+        addBubble('model', imgContent);
+        let newTitle0 = null;
+        const patchBody0 = { messages: [...history0, { role: 'user', content: text }, { role: 'assistant', content: imgContent }] };
+        if (isFirst0) { newTitle0 = text.slice(0, 50) + (text.length > 50 ? '…' : ''); patchBody0.title = newTitle0; }
+        await fetch(`/conversations/${currentId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patchBody0) });
+        if (isFirst0 && newTitle0) { document.getElementById('convTitle').value = newTitle0; loadList(); }
+      } catch (err) {
+        thinkingRow.remove();
+        const { bubble: eb } = addBubble('model', '⚠ ' + err.message);
+        eb.classList.add('err');
+      }
+      setBusy(false); scrollEnd();
+      return;
+    }
+
     // Se não tem conversa ativa, cria uma
     if (!currentId) await newConversation();
 
@@ -881,7 +919,12 @@
     if (memory.trim()) systemParts.push(`## Memória\n${memory.trim()}`);
     if (sys.trim())    systemParts.push(sys.trim());
     if (systemParts.length) apiMessages.push({ role: 'system', content: systemParts.join('\n\n') });
-    apiMessages.push(...history);
+    // Substitui imagens geradas por placeholder para não enviar base64 ao LLM
+    apiMessages.push(...history.map(m =>
+      (m.role === 'assistant' && typeof m.content === 'string' && m.content.startsWith('![imagem gerada]'))
+        ? { ...m, content: '[imagem gerada pelo ComfyUI]' }
+        : m
+    ));
     if (context) {
       if (context.isImage) {
         apiMessages.push({
@@ -1158,11 +1201,12 @@
   }
 
   // ── Indicador "pensando" ──────────────────────────────────
-  function addThinking(isImage) {
+  function addThinking(type) {
     const msgs = document.getElementById('msgs');
     const row  = document.createElement('div');
     row.className = 'msg-row model';
-    const label = isImage ? 'Analisando imagem…' : 'Pensando…';
+    const label = type === 'image'  ? 'Gerando imagem…'    :
+                  type === true     ? 'Analisando imagem…' : 'Pensando…';
     row.innerHTML = `
       <div class="avatar"><i class="fas fa-robot"></i></div>
       <div class="thinking-bubble">

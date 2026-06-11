@@ -129,6 +129,74 @@ app.post('/upload-context', upload.single('file'), async (req, res) => {
   }
 });
 
+// ── Geração de imagem (ComfyUI) ───────────────────────────────
+const COMFY_URL = (process.env.COMFY_URL || '').replace(/\/$/, '');
+
+function buildFluxWorkflow(prompt, seed) {
+  const unet  = process.env.COMFY_UNET  || 'flux1-dev-fp8.safetensors';
+  const clip1 = process.env.COMFY_CLIP1 || 't5xxl_fp8_e4m3fn.safetensors';
+  const clip2 = process.env.COMFY_CLIP2 || 'clip_l.safetensors';
+  const vae   = process.env.COMFY_VAE   || 'ae.safetensors';
+  return {
+    "1": { class_type: "UNETLoader",       inputs: { unet_name: unet, weight_dtype: "fp8_e4m3fn" } },
+    "2": { class_type: "DualCLIPLoader",   inputs: { clip_name1: clip1, clip_name2: clip2, type: "flux" } },
+    "3": { class_type: "VAELoader",        inputs: { vae_name: vae } },
+    "4": { class_type: "CLIPTextEncode",   inputs: { clip: ["2", 0], text: prompt } },
+    "5": { class_type: "CLIPTextEncode",   inputs: { clip: ["2", 0], text: "" } },
+    "6": { class_type: "EmptyLatentImage", inputs: { width: 1024, height: 1024, batch_size: 1 } },
+    "7": {
+      class_type: "KSampler",
+      inputs: {
+        model: ["1", 0], positive: ["4", 0], negative: ["5", 0],
+        latent_image: ["6", 0],
+        seed: seed ?? Math.floor(Math.random() * 2 ** 32),
+        steps: 20, cfg: 3.5, sampler_name: "euler", scheduler: "simple", denoise: 1.0
+      }
+    },
+    "8": { class_type: "VAEDecode", inputs: { samples: ["7", 0], vae: ["3", 0] } },
+    "9": { class_type: "SaveImage", inputs: { images: ["8", 0], filename_prefix: "llm-chat" } }
+  };
+}
+
+app.post('/image', async (req, res) => {
+  if (!COMFY_URL) return res.status(503).json({ error: 'COMFY_URL não configurado no .env' });
+  const { prompt, seed } = req.body;
+  if (!prompt?.trim()) return res.status(400).json({ error: 'prompt obrigatório' });
+  try {
+    const submitResp = await fetch(`${COMFY_URL}/prompt`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt: buildFluxWorkflow(prompt.trim(), seed) })
+    });
+    if (!submitResp.ok) throw new Error('ComfyUI recusou o workflow: HTTP ' + submitResp.status);
+    const { prompt_id } = await submitResp.json();
+
+    // Polling até a imagem ficar pronta (timeout 3 min)
+    const deadline = Date.now() + 3 * 60 * 1000;
+    let imageInfo = null;
+    while (Date.now() < deadline) {
+      await new Promise(r => setTimeout(r, 2000));
+      const hist = await fetch(`${COMFY_URL}/history/${prompt_id}`).then(r => r.json());
+      const outputs = hist[prompt_id]?.outputs;
+      if (outputs) {
+        const images = Object.values(outputs).flatMap(o => o.images ?? []);
+        if (images.length) { imageInfo = images[0]; break; }
+      }
+    }
+    if (!imageInfo) throw new Error('Timeout aguardando geração (3 min)');
+
+    const { filename, subfolder, type } = imageInfo;
+    const imgResp = await fetch(`${COMFY_URL}/view?${new URLSearchParams({ filename, subfolder, type })}`);
+    if (!imgResp.ok) throw new Error('Erro ao buscar imagem: HTTP ' + imgResp.status);
+    const buf  = Buffer.from(await imgResp.arrayBuffer());
+    const mime = imgResp.headers.get('content-type') || 'image/png';
+    res.json({ image: `data:${mime};base64,${buf.toString('base64')}` });
+  } catch (err) {
+    console.error('[image]', err.message);
+    res.status(502).json({ error: err.message });
+  }
+});
+
 // ── Proxy LLM ─────────────────────────────────────────────────
 app.all('/llm/*', async (req, res) => {
   const target  = LLM_URL + req.path.replace(/^\/llm/, '');
