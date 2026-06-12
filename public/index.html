@@ -1250,15 +1250,23 @@
       copyBtn.className = 'copy-btn';
       copyBtn.innerHTML = '<i class="fas fa-copy"></i> Copiar';
       copyBtn.onclick = () => {
-        // Copia o markdown cru (não o HTML renderizado)
-        navigator.clipboard.writeText(bubble.dataset.raw || bubble.textContent).then(() => {
+        const raw = bubble.dataset.raw || bubble.textContent;
+        const imgMatch = raw.match(/^!\[imagem gerada\]\((data:([^;]+);base64,([^)]+))\)/);
+        const done = () => {
           copyBtn.innerHTML = '<i class="fas fa-check"></i> Copiado!';
           copyBtn.classList.add('copied');
-          setTimeout(() => {
-            copyBtn.innerHTML = '<i class="fas fa-copy"></i> Copiar';
-            copyBtn.classList.remove('copied');
-          }, 1500);
-        });
+          setTimeout(() => { copyBtn.innerHTML = '<i class="fas fa-copy"></i> Copiar'; copyBtn.classList.remove('copied'); }, 1500);
+        };
+        if (imgMatch) {
+          const [, , mime, b64] = imgMatch;
+          const bytes = atob(b64);
+          const arr = new Uint8Array(bytes.length);
+          for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
+          const blob = new Blob([arr], { type: mime });
+          navigator.clipboard.write([new ClipboardItem({ [mime]: blob })]).then(done);
+        } else {
+          navigator.clipboard.writeText(raw).then(done);
+        }
       };
       wrap.appendChild(bubble);
       wrap.appendChild(copyBtn);
