@@ -1258,12 +1258,30 @@
           setTimeout(() => { copyBtn.innerHTML = '<i class="fas fa-copy"></i> Copiar'; copyBtn.classList.remove('copied'); }, 1500);
         };
         if (imgMatch) {
-          const [, , mime, b64] = imgMatch;
-          const bytes = atob(b64);
-          const arr = new Uint8Array(bytes.length);
-          for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
-          const blob = new Blob([arr], { type: mime });
-          navigator.clipboard.write([new ClipboardItem({ [mime]: blob })]).then(done);
+          const [, dataUrl, mime, b64] = imgMatch;
+          if (typeof ClipboardItem !== 'undefined') {
+            try {
+              const bytes = atob(b64);
+              const arr = new Uint8Array(bytes.length);
+              for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
+              const blob = new Blob([arr], { type: mime });
+              navigator.clipboard.write([new ClipboardItem({ [mime]: blob })])
+                .then(done)
+                .catch(() => {
+                  // Fallback: abre a imagem numa nova aba para o usuário salvar manualmente
+                  const w = window.open();
+                  w.document.write(`<img src="${dataUrl}" style="max-width:100%">`);
+                  showToast('Clique com botão direito na imagem → Copiar imagem');
+                });
+            } catch {
+              navigator.clipboard.writeText(dataUrl).then(done);
+            }
+          } else {
+            // ClipboardItem não suportado (HTTP) — abre em nova aba
+            const w = window.open();
+            w.document.write(`<img src="${dataUrl}" style="max-width:100%;background:#111">`);
+            showToast('Clique com botão direito na imagem → Copiar imagem');
+          }
         } else {
           navigator.clipboard.writeText(raw).then(done);
         }
