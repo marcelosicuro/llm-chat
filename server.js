@@ -167,7 +167,7 @@ async function translatePrompt(text) {
       body: JSON.stringify({
         model: '',
         messages: [
-          { role: 'system', content: 'You are an image prompt optimizer. Translate the user\'s description to English and rewrite it as a detailed, vivid Stable Diffusion / Flux prompt. Reply with ONLY the optimized prompt, no explanation, no quotes.' },
+          { role: 'system', content: 'Translate the following image description to English. Keep the subject EXACTLY as described — never substitute or invent different subjects. Only add photographic quality descriptors (lighting, style, detail level). Reply with ONLY the English prompt, nothing else.' },
           { role: 'user', content: text }
         ],
         temperature: 0.4,
