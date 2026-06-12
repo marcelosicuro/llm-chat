@@ -193,7 +193,10 @@ async function uploadRefToComfy(dataUrl) {
   return j.name || name;
 }
 
-async function translatePrompt(text) {
+async function translatePrompt(text, hasReference = false) {
+  const systemPrompt = hasReference
+    ? 'Translate the following image description to English. Keep the subject/person EXACTLY as described — never substitute or invent different subjects. The SCENE and LOCATION are critical: expand them with rich, specific details (exact place, time of day, lighting conditions, weather, colors, surrounding elements, atmosphere). Use strong scene keywords so the environment overrides any previous visual context. Add photographic quality descriptors. Reply with ONLY the English prompt, nothing else.'
+    : 'Translate the following image description to English. Keep the subject EXACTLY as described — never substitute or invent different subjects. Only add photographic quality descriptors (lighting, style, detail level). Reply with ONLY the English prompt, nothing else.';
   try {
     const r = await fetch(`${LLM_URL}/v1/chat/completions`, {
       method: 'POST',
@@ -201,7 +204,7 @@ async function translatePrompt(text) {
       body: JSON.stringify({
         model: '',
         messages: [
-          { role: 'system', content: 'Translate the following image description to English. Keep the subject EXACTLY as described — never substitute or invent different subjects. Only add photographic quality descriptors (lighting, style, detail level). Reply with ONLY the English prompt, nothing else.' },
+          { role: 'system', content: systemPrompt },
           { role: 'user', content: text }
         ],
         temperature: 0.4,
@@ -223,7 +226,7 @@ app.post('/image', async (req, res) => {
   const { prompt, seed, reference } = req.body;
   if (!prompt?.trim()) return res.status(400).json({ error: 'prompt obrigatório' });
   try {
-    const optimizedPrompt = await translatePrompt(prompt.trim());
+    const optimizedPrompt = await translatePrompt(prompt.trim(), !!reference);
     console.log(`[image] prompt original: ${prompt.trim()}`);
     console.log(`[image] prompt otimizado: ${optimizedPrompt}`);
     let refName = null;
