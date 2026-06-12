@@ -876,11 +876,21 @@
       const conv0    = await fetch(`/conversations/${currentId}`).then(r => r.json());
       const history0 = conv0.messages || [];
       const isFirst0 = history0.length === 0;
+
+      // "mesmo casal", "mesma pessoa" etc. → usa última imagem gerada como referência (Flux Redux)
+      let reference = null;
+      if (/\bmesm[oa]s?\b/i.test(imgPrompt)) {
+        const lastImg = [...history0].reverse().find(m =>
+          m.role === 'assistant' && typeof m.content === 'string' && m.content.startsWith('![imagem gerada]'));
+        reference = lastImg?.content.match(/\((data:[^)]+)\)/)?.[1] ?? null;
+        if (reference) showToast('Usando imagem anterior como referência');
+      }
+
       try {
         const resp = await fetch('/image', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ prompt: imgPrompt })
+          body: JSON.stringify({ prompt: imgPrompt, reference })
         });
         if (!resp.ok) { const e = await resp.json().catch(() => ({})); throw new Error(e.error ?? 'HTTP ' + resp.status); }
         const { image } = await resp.json();

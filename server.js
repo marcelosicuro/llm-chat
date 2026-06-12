@@ -132,12 +132,12 @@ app.post('/upload-context', upload.single('file'), async (req, res) => {
 // ── Geração de imagem (ComfyUI) ───────────────────────────────
 const COMFY_URL = (process.env.COMFY_URL || '').replace(/\/$/, '');
 
-function buildFluxWorkflow(prompt, seed) {
+function buildFluxWorkflow(prompt, seed, refName) {
   const unet  = process.env.COMFY_UNET  || 'flux1-dev-fp8.safetensors';
   const clip1 = process.env.COMFY_CLIP1 || 't5xxl_fp8_e4m3fn.safetensors';
   const clip2 = process.env.COMFY_CLIP2 || 'clip_l.safetensors';
   const vae   = process.env.COMFY_VAE   || 'ae.safetensors';
-  return {
+  const wf = {
     "1":  { class_type: "UNETLoader",       inputs: { unet_name: unet, weight_dtype: "fp8_e4m3fn" } },
     "2":  { class_type: "DualCLIPLoader",   inputs: { clip_name1: clip1, clip_name2: clip2, type: "flux" } },
     "3":  { class_type: "VAELoader",        inputs: { vae_name: vae } },
@@ -157,6 +157,40 @@ function buildFluxWorkflow(prompt, seed) {
     "9":  { class_type: "VAEDecode", inputs: { samples: ["8", 0], vae: ["3", 0] } },
     "10": { class_type: "SaveImage", inputs: { images: ["9", 0], filename_prefix: "llm-chat" } }
   };
+
+  // Flux Redux: usa imagem de referência para manter o sujeito entre gerações
+  if (refName) {
+    const redux      = process.env.COMFY_REDUX       || 'flux1-redux-dev.safetensors';
+    const clipVision = process.env.COMFY_CLIP_VISION || 'sigclip_vision_patch14_384.safetensors';
+    const strength   = parseFloat(process.env.COMFY_REDUX_STRENGTH || '0.5');
+    wf["11"] = { class_type: "LoadImage",        inputs: { image: refName } };
+    wf["12"] = { class_type: "CLIPVisionLoader", inputs: { clip_name: clipVision } };
+    wf["13"] = { class_type: "CLIPVisionEncode", inputs: { clip_vision: ["12", 0], image: ["11", 0], crop: "center" } };
+    wf["14"] = { class_type: "StyleModelLoader", inputs: { style_model_name: redux } };
+    wf["15"] = {
+      class_type: "StyleModelApply",
+      inputs: {
+        conditioning: ["5", 0], style_model: ["14", 0], clip_vision_output: ["13", 0],
+        strength, strength_type: "multiply"
+      }
+    };
+    wf["8"].inputs.positive = ["15", 0];
+  }
+  return wf;
+}
+
+async function uploadRefToComfy(dataUrl) {
+  const m = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+  if (!m) throw new Error('imagem de referência inválida');
+  const buf  = Buffer.from(m[2], 'base64');
+  const name = `llm-chat-ref-${Date.now()}.png`;
+  const fd   = new FormData();
+  fd.append('image', new Blob([buf], { type: m[1] }), name);
+  fd.append('overwrite', 'true');
+  const r = await fetch(`${COMFY_URL}/upload/image`, { method: 'POST', body: fd });
+  if (!r.ok) throw new Error('falha ao enviar referência ao ComfyUI: HTTP ' + r.status);
+  const j = await r.json();
+  return j.name || name;
 }
 
 async function translatePrompt(text) {
@@ -186,16 +220,21 @@ async function translatePrompt(text) {
 
 app.post('/image', async (req, res) => {
   if (!COMFY_URL) return res.status(503).json({ error: 'COMFY_URL não configurado no .env' });
-  const { prompt, seed } = req.body;
+  const { prompt, seed, reference } = req.body;
   if (!prompt?.trim()) return res.status(400).json({ error: 'prompt obrigatório' });
   try {
     const optimizedPrompt = await translatePrompt(prompt.trim());
     console.log(`[image] prompt original: ${prompt.trim()}`);
     console.log(`[image] prompt otimizado: ${optimizedPrompt}`);
+    let refName = null;
+    if (reference) {
+      refName = await uploadRefToComfy(reference);
+      console.log(`[image] referência enviada: ${refName}`);
+    }
     const submitResp = await fetch(`${COMFY_URL}/prompt`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt: buildFluxWorkflow(optimizedPrompt, seed) })
+      body: JSON.stringify({ prompt: buildFluxWorkflow(optimizedPrompt, seed, refName) })
     });
     if (!submitResp.ok) throw new Error('ComfyUI recusou o workflow: HTTP ' + submitResp.status);
     const { prompt_id } = await submitResp.json();
