@@ -138,23 +138,24 @@ function buildFluxWorkflow(prompt, seed) {
   const clip2 = process.env.COMFY_CLIP2 || 'clip_l.safetensors';
   const vae   = process.env.COMFY_VAE   || 'ae.safetensors';
   return {
-    "1": { class_type: "UNETLoader",       inputs: { unet_name: unet, weight_dtype: "fp8_e4m3fn" } },
-    "2": { class_type: "DualCLIPLoader",   inputs: { clip_name1: clip1, clip_name2: clip2, type: "flux" } },
-    "3": { class_type: "VAELoader",        inputs: { vae_name: vae } },
-    "4": { class_type: "CLIPTextEncode",   inputs: { clip: ["2", 0], text: prompt } },
-    "5": { class_type: "CLIPTextEncode",   inputs: { clip: ["2", 0], text: "" } },
-    "6": { class_type: "EmptyLatentImage", inputs: { width: 1024, height: 1024, batch_size: 1 } },
-    "7": {
+    "1":  { class_type: "UNETLoader",       inputs: { unet_name: unet, weight_dtype: "fp8_e4m3fn" } },
+    "2":  { class_type: "DualCLIPLoader",   inputs: { clip_name1: clip1, clip_name2: clip2, type: "flux" } },
+    "3":  { class_type: "VAELoader",        inputs: { vae_name: vae } },
+    "4":  { class_type: "CLIPTextEncode",   inputs: { clip: ["2", 0], text: prompt } },
+    "5":  { class_type: "FluxGuidance",     inputs: { conditioning: ["4", 0], guidance: 3.5 } },
+    "6":  { class_type: "CLIPTextEncode",   inputs: { clip: ["2", 0], text: "" } },
+    "7":  { class_type: "EmptyLatentImage", inputs: { width: 1024, height: 1024, batch_size: 1 } },
+    "8":  {
       class_type: "KSampler",
       inputs: {
-        model: ["1", 0], positive: ["4", 0], negative: ["5", 0],
-        latent_image: ["6", 0],
+        model: ["1", 0], positive: ["5", 0], negative: ["6", 0],
+        latent_image: ["7", 0],
         seed: seed ?? Math.floor(Math.random() * 2 ** 32),
-        steps: 20, cfg: 3.5, sampler_name: "euler", scheduler: "simple", denoise: 1.0
+        steps: 20, cfg: 1.0, sampler_name: "euler", scheduler: "simple", denoise: 1.0
       }
     },
-    "8": { class_type: "VAEDecode", inputs: { samples: ["7", 0], vae: ["3", 0] } },
-    "9": { class_type: "SaveImage", inputs: { images: ["8", 0], filename_prefix: "llm-chat" } }
+    "9":  { class_type: "VAEDecode", inputs: { samples: ["8", 0], vae: ["3", 0] } },
+    "10": { class_type: "SaveImage", inputs: { images: ["9", 0], filename_prefix: "llm-chat" } }
   };
 }
 
