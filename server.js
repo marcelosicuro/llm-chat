@@ -239,8 +239,8 @@ app.post('/image', async (req, res) => {
     if (!submitResp.ok) throw new Error('ComfyUI recusou o workflow: HTTP ' + submitResp.status);
     const { prompt_id } = await submitResp.json();
 
-    // Polling até a imagem ficar pronta (timeout 3 min)
-    const deadline = Date.now() + 3 * 60 * 1000;
+    // Polling até a imagem ficar pronta (timeout 6 min — Redux carrega modelos extras na 1ª vez)
+    const deadline = Date.now() + 6 * 60 * 1000;
     let imageInfo = null;
     while (Date.now() < deadline) {
       await new Promise(r => setTimeout(r, 2000));
